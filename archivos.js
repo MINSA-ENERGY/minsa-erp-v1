@@ -10,15 +10,19 @@
 //     sola por las rutas finales (aplicarRecibo, como Proyectos v0.108.0).
 //   - PUEDE.ligar: lectura no liga, no sube, no quita (cada funcion de guardar lo COMPRUEBA, no solo esconde el boton).
 //     La biblioteca tiene que estar autorizada (`piloto` de config.js); sin ella, solo enlaces.
-// Lo que NO se porto todavia: mover una liga a otra tarjeta (F1) y el arbol plegable de expediente (v0.33.0). README.
+// v0.8.0: lo que faltaba de docs.js — MOVER una liga a otra tarjeta (F1, con confirmacion, PATCH con If-Match de solo TareaId y
+// «ligar» en la bitacora, la misma frase de Proyectos) y el ARBOL PLEGABLE de expediente de la pestaña Documentos (v0.33.0: una
+// carpeta por tarjeta con su cubeta y vencimiento; nace todo plegado como Proyectos v0.52.0; «Abrir todo» / «Plegar todo»).
 // Nada de innerHTML: el() / textContent.
 
 import { CONFIG } from './config.js';
 import { PUEDE, tareasDe, slug, fechaMexico, nombreCorto, validarUrl, urlParaLiga, urlCortaDeGuid, resumenLargos, textosLargos,
-    TEXTO_MAX, hrefSeguro, filtrarLigas, nombreDeLiga, ordenarProyectos, columnasDe, nombreColumnaEn, porVence, HECHO, TIPOS_LIGA, plural } from './reglas.js';
+    TEXTO_MAX, hrefSeguro, filtrarLigas, nombreDeLiga, ordenarProyectos, columnasDe, nombreColumnaEn, porVence, HECHO, TIPOS_LIGA, plural,
+    colorValido, claseDeColumna } from './reglas.js';
 import { construirManifiesto, validarManifiesto, bytesDelManifiesto, nombreCarpetaLote, NOMBRE_MANIFIESTO, rutaRecibo, validarRecibo } from './lote.js';
 import { $, L, VERSION, estado, el, boton, chip, chipVence, iconoArchivo, avisar, abrirDialogo, cerrarDialogo, confirmar, opciones, limpiar,
-    porId, registrarActividad, fechaCorta, agregarSinDuplicar } from './comun.js';
+    porId, registrarActividad, fechaCorta, agregarSinDuplicar, aplicarVivo, pedirRelectura, iconoSvg } from './comun.js';
+import { esConflicto } from './graph.js';
 
 let alCambiar = () => {};
 /** app.js pasa aqui su repintado (contador del rail + pantalla). */
@@ -75,8 +79,9 @@ function chipEstado(l, fuera) { return fuera ? chip('dirección externa', 'dange
 /**
  * Un documento: icono + nombre (liga solo a SharePoint de la casa, o http(s) si es enlace — hrefSeguro, S-15) + quien lo ligo
  * y donde quedo + chip de estado + «Quitar» si `puede`. Con `conProyecto` nombra el proyecto; con `conTarjeta`, la tarjeta.
+ * v0.8.0: con `moverEn` (el proyecto) y `puede`, un renglon «Mover a» con el select de tarjeta (F1 de Proyectos).
  */
-export function filaLiga(l, { puede = false, conProyecto = false, conTarjeta = true } = {}) {
+export function filaLiga(l, { puede = false, conProyecto = false, conTarjeta = true, moverEn = null } = {}) {
     const f = el('div', 'doc'); f.dataset.liga = String(l.id);
     f.appendChild(iconoArchivo(l.Ruta || l.Title, l.Tipo));
     const cuerpo = el('div', 'doc-cuerpo');
@@ -94,6 +99,13 @@ export function filaLiga(l, { puede = false, conProyecto = false, conTarjeta = t
     if (quien || l._creado) meta.appendChild(el('span', 'muted', `${l.Tipo === 'buzon' ? 'subió' : 'ligó'} ${quien || '—'}${l._creado ? ' · ' + fechaCorta(l._creado) : ''}`));
     meta.appendChild(el('span', 'muted donde', dondeQuedo(l)));
     cuerpo.appendChild(meta);
+    if (puede && moverEn) {
+        const m = el('label', 'mover-liga'); m.appendChild(el('span', 'muted', 'Mover a'));
+        const sel = el('select'); sel.dataset.tarjetaDe = String(l.id); sel.setAttribute('aria-label', `Mover «${String(l.Title || '').slice(0, 60)}» a otra tarjeta`);
+        opcionesTarjetas(sel, moverEn); sel.value = l.TareaId ? String(l.TareaId) : '';
+        sel.addEventListener('change', () => reasignarLiga(l, sel.value, sel));
+        m.appendChild(sel); cuerpo.appendChild(m);
+    }
     f.appendChild(cuerpo);
     const est = el('span', 'estado'); est.appendChild(chipEstado(l, fuera)); f.appendChild(est);
     if (puede) f.appendChild(boton('Quitar', 'mn-btn is-ghost is-sm quitar', () => { const lv = porId(estado.ligas, l.id); if (!lv) { avisar('Esa liga ya no está.', 'ojo'); alCambiar(); return; } quitarLiga(lv); }, { quitar: String(l.id) }));
@@ -160,19 +172,60 @@ export function pintarDocsProyecto(v, p, { abrirTarjeta = null } = {}) {
     cl.appendChild(cab2);
     if (!todas.length) cl.appendChild(el('p', 'vacio', 'Sin documentos ligados todavía.'));
     const puedeDe = l => l.Tipo === 'enlace' ? puedeEnlazarEn(p) : puedeLigarEn(p);
-    // «Del proyecto» primero y luego una cabecera por tarjeta (por titulo), los documentos de la mas nueva a la mas vieja.
+    // v0.8.0 — ARBOL DE EXPEDIENTE (Proyectos v0.33.0): «Del proyecto» primero y luego una CARPETA por tarjeta (por titulo) con su
+    // cubeta, vencimiento y cuantos documentos; cada una se pliega con un clic. Nace todo plegado (Proyectos v0.52.0: el Set guarda
+    // lo ABIERTO) y lo abierto sobrevive a los repintados mientras no se cambie de proyecto. Las tarjetas sin documentos no van aqui:
+    // ya las enseña «Qué documentos faltan», arriba (la decision de v0.5.0).
+    if (arbol.proyectoId !== p.id) arbol = { proyectoId: p.id, abiertas: new Set() };
     const grupos = new Map();
     for (const l of [...todas].sort((a, b) => String(b._creado || '').localeCompare(String(a._creado || '')) || b.id - a.id)) { const k = l.TareaId ? Number(l.TareaId) : 0; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(l); }
     const titulo = k => { if (!k) return 'Del proyecto'; const t = porId(estado.tareas, k); return t ? t.Title : `Tarjeta #${k}`; };
-    for (const k of [...grupos.keys()].sort((a, b) => (a === 0 ? -1 : b === 0 ? 1 : String(titulo(a)).localeCompare(String(titulo(b)))))) {
-        const g = el('div', 'grupo-docs'); g.dataset.grupo = String(k);
-        const h = el('div', 'sec'); h.appendChild(el('span', '', titulo(k))); h.appendChild(el('span', 'n', `${grupos.get(k).length} ${plural(grupos.get(k).length, 'doc')}`));
+    const llaves = [...grupos.keys()].sort((a, b) => (a === 0 ? -1 : b === 0 ? 1 : String(titulo(a)).localeCompare(String(titulo(b)))));
+    if (llaves.length) {
+        const barraArbol = el('div', 'arbol-acciones');
+        const abrirTodo = boton('Abrir todo', 'mn-btn is-ghost is-sm', () => { for (const k of llaves) arbol.abiertas.add(k); aplicarPliegue(cl, llaves); }); abrirTodo.id = 'docsAbrirTodo';
+        const plegarTodo = boton('Plegar todo', 'mn-btn is-ghost is-sm', () => { for (const k of llaves) arbol.abiertas.delete(k); aplicarPliegue(cl, llaves); }); plegarTodo.id = 'docsPlegarTodo';
+        barraArbol.appendChild(abrirTodo); barraArbol.appendChild(plegarTodo); cl.appendChild(barraArbol);
+    }
+    for (const k of llaves) {
+        const g = el('div', 'grupo-docs carpeta-docs'); g.dataset.grupo = String(k);
+        const t = k ? porId(estado.tareas, k) : null;
+        const n = grupos.get(k).length;
+        const h = el('button', 'nodo'); h.type = 'button'; h.dataset.nodo = String(k);
+        h.appendChild(iconoSvg(TRAZOS_CARET, 'caret'));
+        const ic = iconoSvg(TRAZOS_CARPETA, 'carpeta');
+        if (t) { const color = colorValido(t.Color); if (color) ic.dataset.tono = color; else ic.classList.add('is-' + claseDeColumna(t.Columna, cols)); }
+        h.appendChild(ic);
+        h.appendChild(el('span', 'grupo-titulo', titulo(k)));
+        if (t) { h.appendChild(el('span', 'cubeta-de', nombreColumnaEn(t.Columna, cols))); const v2 = chipVence(t); if (v2) h.appendChild(v2); }
+        h.appendChild(el('span', 'n', `${n} ${plural(n, 'doc')}`));
+        h.addEventListener('click', () => { if (arbol.abiertas.has(k)) arbol.abiertas.delete(k); else arbol.abiertas.add(k); aplicarPliegue(cl, llaves); });
         g.appendChild(h);
-        for (const l of grupos.get(k)) g.appendChild(filaLiga(l, { puede: puedeDe(l), conTarjeta: false }));
+        const cuerpo = el('div', 'carpeta-cuerpo');
+        for (const l of grupos.get(k)) cuerpo.appendChild(filaLiga(l, { puede: puedeDe(l), conTarjeta: false, moverEn: p }));
+        g.appendChild(cuerpo);
         cl.appendChild(g);
     }
+    aplicarPliegue(cl, llaves);
     v.appendChild(cl);
     if (bib && todas.some(l => l.Tipo === 'buzon' && l.Ruta)) marcarBuzonEnVivo(p, todas, cl, gen, bib, puedeLigarEn(p));
+}
+// v0.8.0: el arbol de Documentos. `abiertas` guarda lo ABIERTO (0 = Del proyecto, id de cada tarjeta); se reinicia al cambiar de proyecto.
+let arbol = { proyectoId: null, abiertas: new Set() };
+const TRAZOS_CARET = ['M9 6l6 6-6 6'];
+const TRAZOS_CARPETA = ['M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'];
+/** Pliega o despliega en el DOM, sin repintar (la consulta del buzon en vivo sigue escribiendo sobre los mismos renglones), y
+ *  apaga «Abrir todo» / «Plegar todo» cuando ya no tienen nada que hacer. */
+function aplicarPliegue(cl, llaves) {
+    for (const g of cl.querySelectorAll('.carpeta-docs')) {
+        const abierta = arbol.abiertas.has(Number(g.dataset.grupo));
+        g.classList.toggle('is-plegada', !abierta);
+        const h = g.querySelector('.nodo'); h.setAttribute('aria-expanded', String(abierta)); h.title = abierta ? 'Plegar' : 'Desplegar';
+        g.querySelector('.carpeta-cuerpo').hidden = !abierta;
+    }
+    const a = cl.querySelector('#docsAbrirTodo'), pl = cl.querySelector('#docsPlegarTodo');
+    if (a) a.disabled = llaves.every(k => arbol.abiertas.has(k));
+    if (pl) pl.disabled = llaves.every(k => !arbol.abiertas.has(k));
 }
 
 /** La cola async del buzon (C-03 de Proyectos): sale en cuanto su pintada ya no es la vigente. Una consulta por liga de tipo
@@ -314,6 +367,41 @@ export async function quitarLiga(l, reemplazadaPor = null) {
         await registrarActividad('desligar', reemplazadaPor ? `reemplazó la liga «${String(l.Title).slice(0, 60)}» por «${String(reemplazadaPor).slice(0, 60)}»` : `desligó «${String(l.Title).slice(0, 80)}»`, l.ProyectoId, l.TareaId);
         return true;
     } catch (e) { avisar('No se pudo quitar la liga: ' + motivo(e), 'error'); return false; }
+}
+
+/**
+ * v0.8.0 (F1 de Proyectos, docs.js reasignarLiga): cambia la tarjeta de una liga; vacio = del proyecto entero. Antes de escribir
+ * CONFIRMA nombrando de donde a donde (Proyectos v0.34.0: el select cambia con una rueda o un dedo de mas); al cancelar el select
+ * vuelve a la tarjeta actual y nada sale hacia Graph. PATCH con If-Match de solo TareaId; un 412 no pisa: se relee.
+ * La carpeta de destino del arbol se abre, para que se vea a donde fue.
+ */
+export async function reasignarLiga(liga, tareaId, sel = null) {
+    const l = porId(estado.ligas, liga.id);   // resolver por id AL CLIC: un refresco reemplaza los objetos de estado
+    if (!l) { avisar('Esa liga ya no está.', 'ojo'); alCambiar(); return false; }
+    if (!PUEDE.ligar(estado.rol)) { avisar('Tu rol es de lectura: no puedes cambiar ligas.', 'error'); return false; }
+    const p = porId(estado.proyectos, l.ProyectoId);
+    if (!(l.Tipo === 'enlace' ? puedeEnlazarEn(p) : puedeLigarEn(p))) { avisar(`No se puede mover aquí: ${porQueNoSube(p) || 'sin permiso'}.`, 'error'); if (sel) sel.value = l.TareaId ? String(l.TareaId) : ''; return false; }
+    const nuevo = tareaId ? Number(tareaId) : null;
+    const actual = l.TareaId ? Number(l.TareaId) : null;
+    if (actual === nuevo) return false;
+    const t = nuevo ? porId(estado.tareas, nuevo) : null, de = actual ? porId(estado.tareas, actual) : null;
+    if (nuevo && (!t || Number(t.ProyectoId) !== Number(l.ProyectoId))) { avisar('Esa tarjeta no es de este proyecto.', 'error'); if (sel) sel.value = actual ? String(actual) : ''; return false; }
+    const desde = de ? `de la tarjeta «${de.Title}»` : actual ? `de la tarjeta #${actual}` : 'del proyecto entero';
+    const hacia = t ? `a la tarjeta «${t.Title}»` : 'al proyecto entero';
+    const { ok } = await confirmar({ titulo: 'Mover el documento', ok: 'Mover', texto: `¿Mover «${l.Title}» ${desde} ${hacia}? El archivo no se toca: solo cambia a qué tarjeta está ligado.` });
+    if (!ok) { if (sel) sel.value = actual ? String(actual) : ''; return false; }
+    try {
+        const res = await estado.cliente.actualizarRenglon(estado.siteId, L.ligas, l.id, { TareaId: nuevo }, m => avisar(m, 'ojo'), l._etag);
+        aplicarVivo(estado.ligas, l.id, { TareaId: nuevo }, res && res._etag, l);
+        if (arbol.proyectoId === Number(l.ProyectoId)) arbol.abiertas.add(nuevo || 0);
+        avisar(t ? `«${l.Title}» ahora es de la tarjeta «${t.Title}».` : `«${l.Title}» ahora es del proyecto entero.`, 'ok');
+        alCambiar();
+        await registrarActividad('ligar', t ? `pasó la liga «${String(l.Title).slice(0, 60)}» a «${String(t.Title).slice(0, 60)}»` : `dejó la liga «${String(l.Title).slice(0, 60)}» para el proyecto entero`, l.ProyectoId, nuevo);
+        return true;
+    } catch (e) {
+        if (esConflicto(e)) { avisar('Alguien cambió esa liga hace un momento: se releyó. Revisa y vuelve a intentarlo.', 'ojo'); await pedirRelectura(); return false; }
+        avisar('No se pudo cambiar la tarjeta de la liga: ' + motivo(e), 'error'); alCambiar(); return false;
+    }
 }
 
 // ---------------------------------------------------------------- ligar un archivado

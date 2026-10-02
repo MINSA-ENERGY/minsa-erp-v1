@@ -10,12 +10,17 @@
 // v0.5.0: la ficha suma lo que le faltaba de la de Proyectos — DESCRIPCION (editable, viaja en el mismo PATCH), DOCUMENTOS de
 // la tarjeta (sus ligas, quitar, y Subir / Ligar / Enlace con la tarjeta ya puesta: archivos.js) y NOTAS (Accion=comentar en
 // PROY_Actividad, el mismo renglon que escribe Proyectos; aqui la escritura ES la accion, asi que si falla se ve).
+// v0.8.0: lo que faltaba de la ficha de Proyectos — COLOR (selectorTonos de tablero.js v0.12.0; viaja en el mismo PATCH solo si
+// cambio), SUBIR/BAJAR dentro de la cubeta (F11: renumera Orden, un PATCH con If-Match por tarjeta que cambia, sin bitacora,
+// como Proyectos), «CREAR Y OTRA» en la tarea nueva (C1 de Proyectos v0.5.0) y BORRAR UNA NOTA (borrarComentario de comun.js,
+// Proyectos v0.9.0: la propia, o cualquiera si gerencia; sin renglon de bitacora porque PROY_Actividad.Accion esta congelada).
 // Nada de innerHTML: el() / textContent.
 
-import { PUEDE, columnasDe, tareasDe, nombreDe, nombreCorto, nombreColumnaEn, camposDeMovimiento, sellarAsignadoPor, HECHO } from './reglas.js';
+import { PUEDE, columnasDe, tareasDe, nombreDe, nombreCorto, nombreColumnaEn, camposDeMovimiento, sellarAsignadoPor, HECHO,
+    COLORES, colorValido, ordenar, reordenar } from './reglas.js';
 import { $, L, estado, el, boton, avisar, abrirDialogo, cerrarDialogo, opciones, limpiar, porId, aIsoDia, diaInput, fechaInput,
     campoFecha, registrarActividad, aplicarVivo, agregarSinDuplicar, pedirRelectura, personasActivas, mayusculasEnVivo,
-    notasDe, fusionarActividad, asegurarActividadDe, fechaHora } from './comun.js';
+    notasDe, fusionarActividad, asegurarActividadDe, fechaHora, puedeBorrarComentario, borrarComentario } from './comun.js';
 import { esConflicto } from './graph.js';
 import { filaLiga, botonesAlta, puedeLigarEn, puedeEnlazarEn } from './archivos.js';
 
@@ -26,6 +31,31 @@ const yo = () => String(estado.cuenta && estado.cuenta.username || '').toLowerCa
 const motivo = e => (e && e.message ? e.message : String(e));
 /** Las personas activas de PROY_Roles, mas el asignado actual si ya no esta (para no perderlo al abrir la ficha). */
 function personas(actual) { const ps = personasActivas(); const a = String(actual || '').toLowerCase(); return a && !ps.includes(a) ? [...ps, a] : ps; }
+/** v0.8.0: la lista tiene la columna Color (si no se pudieron leer las columnas, se asume que si: como Proyectos, que la manda solo
+ *  cuando cambia). Sin ella, el selector no se ensena: un Color en el cuerpo seria un 400 de SharePoint en toda edicion. */
+const hayColor = () => !estado.columnasTareas || estado.columnasTareas.has('Color');
+
+// ---------------------------------------------------------------- selector de color (v0.8.0; tablero.js v0.12.0 de Proyectos)
+/** Una fila de circulos (sin color + los 8 de COLORES) como grupo de radios: role=radio + aria-checked, UN tab por fila (roving
+ *  tabindex) y flechas. El valor vive en cont.dataset.valor; `alElegir` es opcional; `apagado` deshabilita todo (lectura). */
+export function selectorTonos(cont, actual, alElegir, rotulo = 'Color', apagado = false) {
+    cont.textContent = ''; cont.dataset.valor = colorValido(actual); cont.setAttribute('role', 'radiogroup');
+    const ops = [{ clave: '', nombre: 'Sin color' }, ...COLORES];
+    const marcar = clave => { cont.dataset.valor = clave; for (const x of cont.children) { const on = x.dataset.tono === clave; x.setAttribute('aria-checked', on ? 'true' : 'false'); x.tabIndex = on ? 0 : -1; } };
+    for (const c of ops) {
+        const b = el('button'); b.type = 'button'; b.dataset.tono = c.clave; b.title = c.nombre; b.disabled = apagado;
+        b.setAttribute('role', 'radio'); b.setAttribute('aria-label', `${rotulo}: ${c.nombre}`);
+        b.addEventListener('click', () => { marcar(c.clave); if (alElegir) alElegir(c.clave); });
+        b.addEventListener('keydown', ev => {
+            const d = ev.key === 'ArrowRight' || ev.key === 'ArrowDown' ? 1 : ev.key === 'ArrowLeft' || ev.key === 'ArrowUp' ? -1 : 0; if (!d) return;
+            ev.preventDefault(); const i = (ops.findIndex(o => o.clave === c.clave) + d + ops.length) % ops.length;
+            marcar(ops[i].clave); cont.children[i].focus(); if (alElegir) alElegir(ops[i].clave);
+        });
+        cont.appendChild(b);
+    }
+    marcar(cont.dataset.valor);
+    return cont;
+}
 
 // ---------------------------------------------------------------- 412
 let fichaId = null;
@@ -75,6 +105,7 @@ function revisarNueva() {
     if (!$('ntTitulo').value.trim()) falta = 'Falta el título';
     else { try { aIsoDia($('ntVence').value); } catch (_) { falta = 'Falta una fecha válida (dd/mm/aaaa)'; } }
     b.textContent = falta || 'Crear tarea'; b.disabled = !!falta; b.classList.toggle('is-primary', !falta);
+    $('ntGuardarYOtra').disabled = !!falta;   // v0.8.0: «Crear y otra» se enciende con el mismo criterio
 }
 export function abrirNuevaTarea(p) {
     if (!p) return;
@@ -88,11 +119,15 @@ export function abrirNuevaTarea(p) {
     opciones($('ntColumna'), cols, c => c.clave, c => c.nombre, null);
     $('ntColumna').value = cols[0].clave;
     $('ntTitulo').value = ''; $('ntPrioridad').value = 'normal'; $('ntVence').value = ''; $('ntDesc').value = '';
+    selectorTonos($('ntColor'), '', null, 'Color de la tarjeta');   // v0.8.0
+    $('ntColorCampo').classList.toggle('oculto', !hayColor());
     revisarNueva();
     abrirDialogo('dlgNueva');
     $('ntTitulo').focus();
 }
-async function guardarNueva(ev) {
+/** v0.8.0 (C1 de Proyectos v0.5.0): con `seguirCapturando` («Crear y otra») guarda y deja el dialogo abierto con cubeta, asignado,
+ *  prioridad, vence y color puestos; solo se vacian titulo y descripcion, que cambian de una tarjeta a otra. */
+async function guardarNueva(ev, seguirCapturando = false) {
     if (ev) ev.preventDefault();
     const p = porId(estado.proyectos, $('dlgNueva').dataset.proyecto); if (!p) return;
     if (!PUEDE.tarea(estado.rol)) { avisar('Tu rol es de lectura: no puedes crear tarjetas.', 'error'); return; }
@@ -103,23 +138,27 @@ async function guardarNueva(ev) {
     const cols = columnasDe(p);
     const columna = cols.some(c => c.clave === $('ntColumna').value) ? $('ntColumna').value : cols[0].clave;
     const ahora = new Date().toISOString();
-    // Los mismos campos que escribe guardarNuevaTarea de Proyectos (sin Color: el ERP aun no lo elige).
+    // Los mismos campos que escribe guardarNuevaTarea de Proyectos (v0.8.0: con Color, solo si se eligio uno).
     const campos = limpiar({
         Title: titulo, ProyectoId: p.id, Columna: columna, Asignado: $('ntAsignado').value || undefined,
         Vence: vence || undefined, Prioridad: $('ntPrioridad').value || 'normal', Orden: tareasDe(p, estado.tareas).filter(t => t.Columna === columna).length + 1,
-        Descripcion: $('ntDesc').value.trim() || undefined, Desde: ahora,
+        Descripcion: $('ntDesc').value.trim() || undefined, Desde: ahora, Color: (hayColor() && colorValido($('ntColor').dataset.valor)) || undefined,
         HechoPor: columna === HECHO ? estado.cuenta.username : undefined, HechoEl: columna === HECHO ? ahora : undefined
     });
     if (campos.Asignado) sellarAsignadoPor(campos, estado.columnasTareas, estado.cuenta.username);   // crear ya asignada = delegarla
-    $('ntGuardar').disabled = true;
+    // Los dos botones se apagan AQUI, dentro del alcance que los repone (revisarNueva): el revisor de Proyectos cazo el 12-sep un
+    // «Crear y otra» muerto para siempre cuando la validacion de arriba retornaba antes.
+    $('ntGuardar').disabled = true; $('ntGuardarYOtra').disabled = true;
     try {
         const n = await estado.cliente.crearRenglon(estado.siteId, L.tareas, campos, m => avisar(m, 'ojo'));
         agregarSinDuplicar(estado.tareas, n);
-        cerrarDialogo('dlgNueva');
+        if (seguirCapturando) { $('ntTitulo').value = ''; $('ntDesc').value = ''; $('ntTitulo').focus(); }
+        else cerrarDialogo('dlgNueva');
         alCambiar();
         avisar(`Tarea creada en ${nombreColumnaEn(columna, cols)}.`, 'ok');
         await registrarActividad('crear-tarea', `creó «${titulo.slice(0, 80)}»${campos.Asignado ? ' para ' + nombreDe(campos.Asignado, estado.roles) : ''}`, p.id, n.id);
-    } catch (e) { avisar('No se pudo crear: ' + motivo(e), 'error'); revisarNueva(); }
+    } catch (e) { avisar('No se pudo crear: ' + motivo(e), 'error'); }
+    finally { revisarNueva(); }
 }
 
 // ---------------------------------------------------------------- ficha
@@ -136,6 +175,8 @@ function cambiosFicha(t) {
     if (diaInput(v) !== diaInput(t.Vence)) c.Vence = v;
     const d = $('fDesc').value.trim();   // v0.5.0: vacia = null (borra la celda), como Proyectos
     if (d !== String(t.Descripcion || '').trim()) c.Descripcion = d || null;
+    // v0.8.0: Color solo si cambio (Proyectos v0.12.0: un Color siempre presente daria 400 en una lista sin la columna); «Sin color» = null.
+    if (hayColor()) { const col = colorValido($('fColor').dataset.valor); if (col !== colorValido(t.Color)) c.Color = col || null; }
     return c;
 }
 function revisarFicha() {
@@ -159,6 +200,8 @@ function pintarFicha(t) {
     $('fVence').value = fechaInput(t.Vence);
     $('fPrioridad').value = t.Prioridad || 'normal';
     $('fDesc').value = t.Descripcion || '';
+    selectorTonos($('fColor'), t.Color, revisarFicha, 'Color de la tarjeta', !edita);   // v0.8.0
+    $('fColorCampo').classList.toggle('oculto', !hayColor());
     for (const id of ['fTitulo', 'fAsignado', 'fVence', 'fPrioridad', 'fDesc']) $(id).disabled = !edita;
     for (const b of document.querySelectorAll('#formFicha .fecha-cal')) b.disabled = !edita;
     $('fGuardar').classList.toggle('oculto', !edita);
@@ -174,12 +217,55 @@ function pintarFicha(t) {
         mv.appendChild(b);
     }
     $('fMoverCaja').classList.toggle('oculto', !mueve);
+    pintarOrden(t, p);
     const puedeBorrar = PUEDE.borrar(estado.rol) && activo;
     $('fBorrar').classList.toggle('oculto', !puedeBorrar);
     $('fBorrar').textContent = 'Borrar tarjeta'; delete $('fBorrar').dataset.armado;
     pintarDocsFicha(t, p);
     pintarNotas(t, p);
     revisarFicha();
+}
+/** v0.8.0 (F11 de Proyectos): el lugar de la tarjeta en su cubeta («2 de 5») con Subir / Bajar. Solo si el rol mueve, el proyecto
+ *  esta activo y la cubeta tiene mas de una tarjeta. Se repinta sola (sin tocar lo que se esta editando en la ficha). */
+function pintarOrden(t, p) {
+    const or = $('fOrden'); or.textContent = '';
+    const mueve = PUEDE.mover(estado.rol) && !!p && p.Estado === 'activo';
+    const hermanas = mueve ? ordenar(tareasDe(p, estado.tareas).filter(x => x.Columna === t.Columna)) : [];
+    or.classList.toggle('oculto', hermanas.length < 2);
+    if (hermanas.length < 2) return;
+    const i = hermanas.findIndex(x => x.id === t.id);
+    or.appendChild(el('span', 'lugar', `Lugar en la cubeta: ${i + 1} de ${hermanas.length}`));
+    const up = boton('↑ Subir', 'mn-btn is-sm', () => reordenarTarea(t.id, -1), { orden: 'subir' }); up.disabled = i <= 0; up.title = 'Subir un lugar'; or.appendChild(up);
+    const dn = boton('↓ Bajar', 'mn-btn is-sm', () => reordenarTarea(t.id, 1), { orden: 'bajar' }); dn.disabled = i >= hermanas.length - 1; dn.title = 'Bajar un lugar'; or.appendChild(dn);
+}
+/** v0.8.0 (F11 de Proyectos): Subir / Bajar. reordenar() renumera la cubeta en el orden visual y devuelve SOLO lo que cambia (la
+ *  primera vez puede ser la cubeta entera: las sembradas no traen Orden); cada cambio es un PATCH con If-Match. Sin bitacora,
+ *  como Proyectos. Si falla a medias (los PATCH van en serie) se relee para no quedar a medias. */
+export async function reordenarTarea(id, delta) {
+    const t = porId(estado.tareas, id); if (!t) return false;
+    if (!PUEDE.mover(estado.rol)) { avisar('Tu rol es de lectura: no puedes reordenar.', 'error'); return false; }
+    const p = porId(estado.proyectos, t.ProyectoId);
+    if (!p || p.Estado !== 'activo') { avisar('El proyecto está cerrado.', 'error'); return false; }
+    const cambios = reordenar(tareasDe(p, estado.tareas).filter(x => x.Columna === t.Columna), t.id, delta);
+    if (!cambios.length) return false;
+    for (const b of $('fOrden').querySelectorAll('button')) b.disabled = true;
+    const repintarOrden = () => { const tv = porId(estado.tareas, id); if ($('dlgFicha').open && fichaId === id && tv) pintarOrden(tv, porId(estado.proyectos, tv.ProyectoId)); };
+    try {
+        for (const c of cambios) {
+            const x = porId(estado.tareas, c.id);
+            const res = await estado.cliente.actualizarRenglon(estado.siteId, L.tareas, x.id, { Orden: c.Orden }, m => avisar(m, 'ojo'), x._etag);
+            aplicarVivo(estado.tareas, x.id, { Orden: c.Orden }, res && res._etag, x);
+        }
+        alCambiar();
+        repintarOrden();
+        avisar(delta < 0 ? 'Subida un lugar.' : 'Bajada un lugar.', 'ok');
+        return true;
+    } catch (e) {
+        if (esConflicto(e)) { await conflicto(t); return false; }
+        await pedirRelectura(); repintarOrden();
+        avisar('No se pudo reordenar: ' + motivo(e), 'error');
+        return false;
+    }
 }
 /** v0.5.0: los documentos de la tarjeta (sus ligas de PROY_Ligas) y los botones de alta con la tarjeta ya puesta; al terminar
  *  o cancelar el dialogo de alta, la ficha se vuelve a abrir (alTerminar). */
@@ -201,18 +287,30 @@ function pintarNotas(t, p) {
         const it = el('div', 'nota'); it.dataset.nota = String(n.id);
         const cab = el('div', 'nota-cab'); cab.appendChild(el('b', '', nombreCorto(n.Quien, estado.roles))); cab.appendChild(el('span', 'muted', fechaHora(n.Cuando)));
         it.appendChild(cab); it.appendChild(el('div', 'nota-texto', n.Title || ''));
+        // v0.8.0 (Proyectos v0.9.0): borrar la nota — la propia, o cualquiera si gerencia; proyecto activo. Se resuelve por id AL
+        // CLIC (una relectura reemplaza los objetos) y borrarComentario vuelve a comprobar el permiso y pregunta antes.
+        if (puedeBorrarComentario(n, p)) {
+            const nId = n.id, tId = t.id;
+            const b = boton('Borrar', 'mn-btn is-ghost is-sm borrar-nota', async () => {
+                const nv = porId(estado.actividad, nId), tv = porId(estado.tareas, tId), pv = tv && porId(estado.proyectos, tv.ProyectoId);
+                if (!nv || !tv) { avisar('Esa nota ya no está.', 'ojo'); return; }
+                if (await borrarComentario(nv, pv)) { pintarNotas(tv, pv); alCambiar(); }
+            }, { borrarNota: String(n.id) });
+            b.title = 'Borrar esta nota'; b.setAttribute('aria-label', 'Borrar esta nota');
+            cab.appendChild(b);
+        }
         c.appendChild(it);
     }
     if (!notas.length) c.appendChild(el('p', 'vacio', 'Sin notas todavía.'));
     const anota = PUEDE.tarea(estado.rol) && !!p && p.Estado === 'activo';
     $('fAnotarCaja').classList.toggle('oculto', !anota);
 }
-/** Repinta SOLO documentos y notas de la ficha abierta (tras una liga, un quitar o una relectura) sin tocar lo que se edita. */
+/** Repinta SOLO documentos, notas y lugar en la cubeta de la ficha abierta (tras una liga, un quitar o una relectura) sin tocar lo que se edita. */
 export function refrescarFicha() {
     if (!$('dlgFicha').open || fichaId == null) return;
     const t = porId(estado.tareas, fichaId); if (!t) return;
     const p = porId(estado.proyectos, t.ProyectoId);
-    pintarDocsFicha(t, p); pintarNotas(t, p);
+    pintarDocsFicha(t, p); pintarNotas(t, p); pintarOrden(t, p);   // v0.8.0: el lugar en la cubeta tambien (no toca lo que se edita)
 }
 export function abrirFicha(id) {
     const t = porId(estado.tareas, id); if (!t) return;
@@ -312,6 +410,7 @@ export function hacerReceptora(col, clave, p) {
 export function engancharTarjetas() {
     campoFecha('ntVence'); campoFecha('fVence');
     $('formNueva').addEventListener('submit', guardarNueva);
+    $('ntGuardarYOtra').addEventListener('click', () => guardarNueva(null, true));   // v0.8.0 (C1 de Proyectos)
     $('ntTitulo').addEventListener('input', () => { mayusculasEnVivo($('ntTitulo')); revisarNueva(); });
     $('ntVence').addEventListener('input', revisarNueva);
     $('ntCancelar').addEventListener('click', () => cerrarDialogo('dlgNueva'));

@@ -16,6 +16,9 @@
      ?gastos=no = la app entera sin ERP_Gastos/ERP_Roles/biblioteca (#gastos lo dice; lo demas pasa igual).
      v0.7.0 (seccion 12b): ?erp=contabilidad = la cola «CFDI por confirmar» — confirmar (relee CfdiUuid eq antes), UUID ya ligado
      en SharePoint, «Ninguno es» con sus descartados, 412; en las demas corridas, que nadie mas la ve ni la fuerza.
+     v0.8.0: el color que puso Proyectos tiñe la tarjeta; el arbol plegable de Documentos (nace plegado, abrir/plegar uno y todo);
+     «Crear y otra»; color y Subir/Bajar en la ficha (PATCH de solo Color / Orden con If-Match); mover una liga de tarjeta (F1:
+     confirmar, cancelar, 412, al proyecto entero); borrar una nota (propia; la ajena solo gerencia); lectura: nada de eso, ni forzando.
      Los ~2,800 renglones de escenarios de Proyectos prueban sus VISTAS (tablero, docs, chat, capital...), que no se
      trajeron; vuelven por pantalla en la fase 4. Sin CSP a proposito (herramienta de desarrollo, _config.yml la
      excluye de Pages). Se corre desde app/ con `npm run test:e2e` (PowerShell + Edge headless, 3 roles). -->
@@ -313,7 +316,7 @@ try {
     const XSS = '<img src=x onerror="window.__xss=1">Tarea con etiqueta';
     const T = (Title, ProyectoId, Columna, Asignado, Vence, extra = {}) => { const id = DB.siguienteId++; DB.listas.tareas.items.push({ id, fields: { Title, ProyectoId, Columna, Asignado, ...(Vence !== null ? { Vence } : {}), Prioridad: 'normal', ...extra } }); return id; };
     const tVencida = T('Vencida mía', lau, 'por-hacer', yo, dia(-3), { Prioridad: 'alta' });
-    const tHoy = T('Para hoy mía', lau, 'en-curso', yo, dia(0));
+    const tHoy = T('Para hoy mía', lau, 'en-curso', yo, dia(0), { Color: 'morado' });   // v0.8.0: un color elegido en Proyectos
     const tSemana = T('Esta semana mía', lau, 'por-hacer', yo, dia(4));
     T('Más adelante mía', lau, 'en-revision', yo, dia(30));
     T('Sin fecha mía', lau, 'por-hacer', yo, null);
@@ -385,7 +388,7 @@ try {
     await esperar(() => !$('pantallaSesion').classList.contains('oculto'), 'pantalla de sesion', 15000);
     await esperar(() => pantalla(), 'primera pantalla');
     R.ok('entra con MSAL y oculta la entrada', $('pantallaEntrar').classList.contains('oculto'));
-    R.ok('pie con la version', $('pie').textContent === 'MINSA ERP v0.7.0', $('pie').textContent);
+    R.ok('pie con la version', $('pie').textContent === 'MINSA ERP v0.8.0', $('pie').textContent);
     R.ok('celular: «···» lleva Tema y Salir', !!document.querySelector('#masMovil #temaMovil') && !!document.querySelector('#masMovil #btnSalirMovil'));
     R.ok('nombre de PROY_Roles, no el correo', $('quien').textContent === 'Persona de Prueba', $('quien').textContent);
     R.ok('rol leido de PROY_Roles', $('rolQuien').textContent === ROL, $('rolQuien').textContent);
@@ -424,6 +427,9 @@ try {
     R.ok('kanban: la tarjeta lleva quién (nombre corto) y sin iniciales', [...document.querySelectorAll('#kanban .kc')].some(c => /Colega/.test(c.textContent)) && !document.querySelector('#kanban .av'));
     R.ok('kanban: la tarjeta sin asignar dice «sin dueño»', !!document.querySelector('#kanban .kc .sin-dueno'));
     R.ok('kanban: orden, alta primero en «Por hacer»', document.querySelector('#kanban .k-por-hacer .kc .titulo').textContent === 'Vencida mía');
+    { const kc = t => [...document.querySelectorAll('#kanban .kc')].find(c => c.querySelector('.titulo').textContent === t);
+      const fondo = t => getComputedStyle(kc(t)).backgroundColor;
+      R.ok('kanban (v0.8.0): el color elegido en Proyectos tiñe la tarjeta (data-tono, sale de los tokens)', kc('Para hoy mía').dataset.tono === 'morado' && !kc('Sin fecha mía').dataset.tono && fondo('Para hoy mía') !== fondo('Sin fecha mía') && !/rgba\(0, 0, 0, 0\)/.test(fondo('Para hoy mía')), `${fondo('Para hoy mía')} vs ${fondo('Sin fecha mía')}`); }
     if (ROL === 'lectura') R.ok('kanban (lectura): «Nueva tarea» dice por qué no y no hace nada', $('btnNuevaTarea').disabled && $('btnNuevaTarea').classList.contains('incompleto') && $('btnNuevaTarea').textContent === 'Nueva tarea: tu rol es de lectura', $('btnNuevaTarea').textContent);
     else R.ok('kanban: «Nueva tarea» vivo para quien escribe', !$('btnNuevaTarea').disabled && !$('btnNuevaTarea').classList.contains('incompleto'), $('btnNuevaTarea').textContent);
     R.ok('kanban: responsable por nombre', /Responsable: Jefa Demo/.test(vista().textContent));
@@ -481,9 +487,24 @@ try {
     R.ok('Documentos: pestaña activa con «faltan 7»', tabDocs.classList.contains('is-on') && tabDocs.getAttribute('aria-selected') === 'true' && tabDocs.querySelector('.mn-chip')?.textContent === 'faltan 7', tabDocs.textContent);
     R.ok('Documentos: «Qué documentos faltan» lista las 7 tarjetas abiertas sin documento', document.querySelectorAll('#docsFaltan .falta').length === 7 && !document.querySelector(`#docsFaltan [data-falta="${tVencida}"]`) && !document.querySelector(`#docsFaltan [data-falta="${tHoy}"]`), String(document.querySelectorAll('#docsFaltan .falta').length));
     R.ok('Documentos: ni la hecha ni las de otros proyectos faltan', !textos('#docsFaltan .titulo').some(t => t === 'Hecha mía' || t === 'Haciendo PITEPEC'));
-    R.ok('Documentos: los 4 de LAU agrupados — «Del proyecto» primero', textos('#docsLista .grupo-docs .sec > span:first-child').join('|') === 'Del proyecto|Para hoy mía|Vencida mía', textos('#docsLista .grupo-docs .sec > span:first-child').join('|'));
+    R.ok('Documentos: los 4 de LAU agrupados — «Del proyecto» primero', textos('#docsLista .grupo-docs .nodo .grupo-titulo').join('|') === 'Del proyecto|Para hoy mía|Vencida mía', textos('#docsLista .grupo-docs .nodo .grupo-titulo').join('|'));
     await esperar(() => /ya lo acomodó la skill/.test(document.querySelector(`#docsLista [data-liga="${lgBuzon}"] .estado`)?.textContent || ''), 'el buzón en vivo (404 = ya lo acomodó la skill)');
     R.ok('Documentos: el lote cuya carpeta ya no está dice «ya lo acomodó la skill»', true);
+    // v0.8.0: el ARBOL de expediente (Proyectos v0.33.0): nace todo plegado (v0.52.0), una carpeta se abre con un clic, y «Abrir todo» / «Plegar todo».
+    { const nodos = () => [...document.querySelectorAll('#docsLista .carpeta-docs .nodo')];
+      const visible = id => !!document.querySelector(`#docsLista [data-liga="${id}"]`)?.offsetParent;
+      R.ok('Documentos (v0.8.0): árbol — nace todo plegado y los documentos no se ven', nodos().length === 3 && nodos().every(n => n.getAttribute('aria-expanded') === 'false') && ![lgArch, lgEnlace, lgBuzon, lgFuera].some(visible), nodos().map(n => n.getAttribute('aria-expanded')).join(','));
+      R.ok('Documentos: «Abrir todo» vivo y «Plegar todo» apagado', !$('docsAbrirTodo').disabled && $('docsPlegarTodo').disabled);
+      const nodoHoy = document.querySelector(`#docsLista .nodo[data-nodo="${tHoy}"]`);
+      R.ok('Documentos: la carpeta de una tarjeta dice su cubeta y cuántos docs, y toma su color (o el de su cubeta)', /En curso/.test(nodoHoy.textContent) && nodoHoy.querySelector('.n').textContent === '1 doc' && nodoHoy.querySelector('.carpeta').dataset.tono === 'morado' && document.querySelector(`#docsLista .nodo[data-nodo="${tVencida}"] .carpeta`).classList.contains('is-p'), nodoHoy.textContent);
+      nodoHoy.click();
+      R.ok('Documentos: un clic despliega SOLO esa carpeta', nodoHoy.getAttribute('aria-expanded') === 'true' && visible(lgFuera) && !visible(lgArch) && !visible(lgEnlace) && !$('docsAbrirTodo').disabled && !$('docsPlegarTodo').disabled);
+      $('docsAbrirTodo').click();
+      R.ok('Documentos: «Abrir todo» despliega las 3 y se apaga', nodos().every(n => n.getAttribute('aria-expanded') === 'true') && [lgArch, lgEnlace, lgBuzon, lgFuera].every(visible) && $('docsAbrirTodo').disabled && !$('docsPlegarTodo').disabled);
+      $('docsPlegarTodo').click();
+      R.ok('Documentos: «Plegar todo» las vuelve a plegar', nodos().every(n => n.getAttribute('aria-expanded') === 'false') && !visible(lgFuera) && $('docsPlegarTodo').disabled); }
+    if (ESCRIBE) R.ok('Documentos (v0.8.0): «Mover a» en cada liga con la tarjeta actual puesta', document.querySelectorAll('#docsLista [data-tarjeta-de]').length === 4 && document.querySelector(`#docsLista [data-tarjeta-de="${lgFuera}"]`).value === String(tHoy) && document.querySelector(`#docsLista [data-tarjeta-de="${lgEnlace}"]`).value === '');
+    else R.ok('Documentos (lectura, v0.8.0): sin «Mover a»', !document.querySelector('#docsLista [data-tarjeta-de]'));
     if (ESCRIBE) {
         R.ok('Documentos: Subir · Ligar · Pegar enlace en la barra y en cada faltante', !!document.querySelector('.docs-barra [data-subir-a="0"]') && !!document.querySelector('.docs-barra [data-ligar-a="0"]') && !!document.querySelector('.docs-barra [data-enlace-a="0"]') && document.querySelectorAll('#docsFaltan [data-subir-a]').length === 7);
         R.ok('Documentos: «Buscar el archivado» para el lote acomodado', !!document.querySelector(`#docsLista [data-buscar="${lgBuzon}"]`));
@@ -568,6 +589,28 @@ try {
         await esperar(() => colDe('INFORME DE PRUEBA'), 'tarjeta nueva en el tablero');
         R.ok('crear: la tarjeta aparece en su cubeta y el aviso lo dice', colDe('INFORME DE PRUEBA') === 'por-hacer' && !!avisoCon('Tarea creada en Por hacer'));
 
+        // 10.1b v0.8.0: «Crear y otra» (C1 de Proyectos) — guarda, deja el diálogo abierto con lo que se repite y vacía título y descripción
+        $('btnNuevaTarea').click(); await esperar(() => $('dlgNueva').open, 'diálogo nueva tarea (en serie)');
+        R.ok('crear y otra: nace apagado, como «Crear tarea», y el color en «Sin color»', $('ntGuardarYOtra').disabled && $('ntColor').querySelectorAll('[role="radio"]').length === 9 && $('ntColor').querySelector('[aria-checked="true"]').dataset.tono === '');
+        poner('ntTitulo', 'primera en serie'); poner('ntPrioridad', 'baja'); poner('ntColumna', 'en-curso'); poner('ntDesc', 'solo la primera');
+        $('ntColor').querySelector('[data-tono="verde"]').click();
+        R.ok('crear y otra: con título se enciende', !$('ntGuardarYOtra').disabled);
+        const nSerie = filas('tareas').length;
+        $('ntGuardarYOtra').click();
+        await esperar(() => filas('tareas').length === nSerie + 1 && $('ntTitulo').value === '', 'primera en serie creada');
+        const s1 = tarea('PRIMERA EN SERIE');
+        R.ok('crear y otra: POST con Color, cubeta y prioridad elegidas (campos de esquema.json)', !!s1 && s1.fields.Color === 'verde' && s1.fields.Columna === 'en-curso' && s1.fields.Prioridad === 'baja' && s1.fields.Descripcion === 'solo la primera' && enEsquema(s1.fields, 'PROY_Tareas').length === 0, JSON.stringify(s1 && s1.fields));
+        R.ok('crear y otra: el diálogo sigue abierto, título y descripción vacíos, lo demás puesto', $('dlgNueva').open && $('ntDesc').value === '' && $('ntPrioridad').value === 'baja' && $('ntColumna').value === 'en-curso' && $('ntColor').dataset.valor === 'verde' && $('ntGuardar').disabled && $('ntGuardarYOtra').disabled && document.activeElement === $('ntTitulo'));
+        poner('ntTitulo', 'segunda en serie');
+        $('formNueva').requestSubmit();
+        await esperar(() => !$('dlgNueva').open && tarea('SEGUNDA EN SERIE'), 'segunda en serie creada');
+        const s2 = tarea('SEGUNDA EN SERIE');
+        R.ok('crear y otra: la segunda hereda cubeta, prioridad y color, sin la descripción, y va detrás (Orden + 1)', s2.fields.Color === 'verde' && s2.fields.Columna === 'en-curso' && s2.fields.Prioridad === 'baja' && !('Descripcion' in s2.fields) && s2.fields.Orden === s1.fields.Orden + 1, JSON.stringify(s2.fields));
+        await esperar(() => actividad('crear-tarea').length === 3, 'bitácora de las dos en serie');
+        R.ok('crear y otra: un crear-tarea por tarjeta', actividad('crear-tarea').slice(1).map(a => a.fields.Title).join('|') === 'creó «PRIMERA EN SERIE» para Persona de Prueba|creó «SEGUNDA EN SERIE» para Persona de Prueba', actividad('crear-tarea').map(a => a.fields.Title).join('|'));
+        await esperar(() => tarjetaDe('SEGUNDA EN SERIE'), 'en el tablero');
+        R.ok('crear y otra: las dos salen teñidas en el tablero', tarjetaDe('PRIMERA EN SERIE').dataset.tono === 'verde' && tarjetaDe('SEGUNDA EN SERIE').dataset.tono === 'verde');
+
         // 10.2 Mover desde la ficha (la via del celular)
         tarjetaDe('Esta semana mía').click(); await esperar(() => $('dlgFicha').open, 'ficha');
         R.ok('ficha: «Mover a» con las 4 cubetas y la actual deshabilitada', $('fMover').querySelectorAll('button').length === 4 && $('fMover').querySelector('[data-move="por-hacer"]').disabled && /actual/.test($('fMover').querySelector('[data-move="por-hacer"]').textContent));
@@ -635,6 +678,36 @@ try {
         await esperar(() => avisoCon('Alguien cambió'), '412 al mover');
         R.ok('412 al mover: no se movió y sin mover-tarea nuevo', filas('tareas').find(x => x.id === id4).fields.Columna === 'en-revision' && actividad('mover-tarea').length === 3);
 
+        // 10.5b v0.8.0: COLOR y SUBIR/BAJAR en la ficha (misma tarjeta, ya releída tras el 412)
+        await dormir(60);
+        R.ok('color: la ficha trae los 9 tonos (sin color + 8) con el actual marcado', $('dlgFicha').open && $('fColor').querySelectorAll('[role="radio"]').length === 9 && $('fColor').querySelector('[aria-checked="true"]').dataset.tono === '' && [...$('fColor').querySelectorAll('button')].every(b => !b.disabled));
+        $('fColor').querySelector('[data-tono="rosa"]').click();
+        R.ok('color: elegir un tono enciende «Guardar cambios»', !$('fGuardar').disabled && $('fGuardar').textContent === 'Guardar cambios');
+        ifm = DB.ifMatch; const nEd = actividad('editar-tarea').length;
+        $('formFicha').requestSubmit();
+        await esperar(() => filas('tareas').find(x => x.id === id4).fields.Color === 'rosa', 'color guardado');
+        R.ok('color: viaja SOLO Color en el PATCH, con If-Match (columna de esquema.json)', Object.keys(DB.ultimoPatch.tareas).join(',') === 'Color' && DB.ifMatch === ifm + 1 && enEsquema(DB.ultimoPatch.tareas, 'PROY_Tareas').length === 0, JSON.stringify(DB.ultimoPatch.tareas));
+        await esperar(() => tarjetaDe('Cambiada por alguien más')?.dataset.tono === 'rosa' && actividad('editar-tarea').length === nEd + 1, 'tarjeta teñida y bitácora');
+        R.ok('color: la tarjeta del tablero se tiñe y la bitácora dice «editó»', actividad('editar-tarea').at(-1).fields.Title === 'editó «Cambiada por alguien más»' && $('fGuardar').textContent === 'Sin cambios');
+        $('fColor').querySelector('[data-tono=""]').click(); $('formFicha').requestSubmit();
+        await esperar(() => !('Color' in filas('tareas').find(x => x.id === id4).fields), 'color quitado');
+        R.ok('color: «Sin color» manda null y borra la celda', DB.ultimoPatch.tareas.Color === null && Object.keys(DB.ultimoPatch.tareas).join(',') === 'Color');
+        await esperar(() => tarjetaDe('Cambiada por alguien más') && !tarjetaDe('Cambiada por alguien más').dataset.tono, 'sin tinte');
+        const enRevision = () => [...document.querySelectorAll('#kanban .kcol[data-columna="en-revision"] .kc .titulo')].map(n => n.textContent).join('|');
+        R.ok('orden: «Lugar en la cubeta: 1 de 2» con Subir apagado y Bajar vivo', !$('fOrden').classList.contains('oculto') && /1 de 2/.test($('fOrden').textContent) && $('fOrden').querySelector('[data-orden="subir"]').disabled && !$('fOrden').querySelector('[data-orden="bajar"]').disabled && enRevision() === 'Cambiada por alguien más|De la colega', `${$('fOrden').textContent} · ${enRevision()}`);
+        poner('fDesc', 'a medio escribir');
+        ifm = DB.ifMatch; const nAct = filas('actividad').length;
+        $('fOrden').querySelector('[data-orden="bajar"]').click();
+        await esperar(() => enRevision() === 'De la colega|Cambiada por alguien más', 'bajada un lugar');
+        R.ok('orden: la primera vez numera la cubeta entera — un PATCH de solo Orden por tarjeta, con If-Match', DB.ifMatch === ifm + 2 && Object.keys(DB.ultimoPatch.tareas).join(',') === 'Orden' && filas('tareas').find(x => x.id === id4).fields.Orden === 2 && tarea('De la colega').fields.Orden === 1, `ifMatch +${DB.ifMatch - ifm}`);
+        R.ok('orden: sin renglón de bitácora (como Proyectos)', filas('actividad').length === nAct);
+        R.ok('orden: la ficha sigue abierta, dice el lugar nuevo y no pierde lo que se escribía', $('dlgFicha').open && /2 de 2/.test($('fOrden').textContent) && !$('fOrden').querySelector('[data-orden="subir"]').disabled && $('fOrden').querySelector('[data-orden="bajar"]').disabled && $('fDesc').value === 'a medio escribir');
+        ifm = DB.ifMatch;
+        $('fOrden').querySelector('[data-orden="subir"]').click();
+        await esperar(() => enRevision() === 'Cambiada por alguien más|De la colega', 'subida un lugar');
+        R.ok('orden: después solo cambian las dos que se cruzan', DB.ifMatch === ifm + 2 && filas('tareas').find(x => x.id === id4).fields.Orden === 1 && tarea('De la colega').fields.Orden === 2);
+        poner('fDesc', String(filas('tareas').find(x => x.id === id4).fields.Descripcion || ''));
+
         // 10.6 Borrar: solo gerencia, en dos toques
         if (ROL === 'gerencia') {
             R.ok('borrar (gerencia): el botón se ve', !$('fBorrar').classList.contains('oculto'));
@@ -660,6 +733,7 @@ try {
         tarjetaDe('Esta semana mía').click(); await esperar(() => $('dlgFicha').open, 'ficha (lectura)');
         R.ok('lectura: la ficha abre con todo deshabilitado, sin Guardar, sin Mover ni Borrar', ['fTitulo', 'fAsignado', 'fVence', 'fPrioridad', 'fDesc'].every(id => $(id).disabled) && $('fGuardar').classList.contains('oculto') && $('fMoverCaja').classList.contains('oculto') && $('fBorrar').classList.contains('oculto') && !$('fSoloLectura').classList.contains('oculto'));
         R.ok('lectura: la ficha enseña las notas pero no deja anotar ni subir', !!document.querySelector('#fNotas .nota') && $('fAnotarCaja').classList.contains('oculto') && !!document.querySelector('#fDocsAltas [data-no-sube]') && !document.querySelector('#fDocsAltas [data-subir-a]'));
+        R.ok('lectura (v0.8.0): el color se ve pero apagado, sin Subir/Bajar ni «Borrar» en las notas', $('fColor').querySelectorAll('button').length === 9 && [...$('fColor').querySelectorAll('button')].every(b => b.disabled) && !$('fOrden').querySelector('button') && !document.querySelector('#fNotas [data-borrar-nota]'));
         $('fTitulo').value = 'Forzado'; $('formFicha').requestSubmit(); await dormir(60);
         R.ok('lectura: forzar Guardar → se niega y lo dice', !!avisoCon('rol es de lectura') && !!tarea('Esta semana mía'), avisoCon('rol es de lectura')?.textContent);
         $('fCerrar').click(); await esperar(() => !$('dlgFicha').open, 'ficha cerrada');
@@ -668,6 +742,8 @@ try {
         R.ok('lectura: forzar mover → se niega', movio === false && t.fields.Columna === 'por-hacer' && !!avisoCon('no puedes mover'));
         { const dt = new DataTransfer(); dt.setData('text/plain', String(t.id)); document.querySelector('#kanban .kcol[data-columna="hecho"]').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true })); await dormir(60); }
         R.ok('lectura: soltar sobre una cubeta no hace nada', t.fields.Columna === 'por-hacer');
+        const reordeno = await TJ.reordenarTarea(t.id, 1);
+        R.ok('lectura (v0.8.0): forzar Subir/Bajar → se niega y lo dice', reordeno === false && !('Orden' in t.fields) && !!avisoCon('no puedes reordenar'));
         TJ.abrirNuevaTarea({ ...lauP.fields, id: lauP.id }); await dormir(30);
         R.ok('lectura: forzar «Nueva tarea» → no abre el diálogo', !$('dlgNueva').open && !!avisoCon('no puedes crear'));
         R.ok('lectura: CERO escrituras en toda la corrida', escrituras().length === 0, escrituras().join(' | '));
@@ -755,6 +831,37 @@ try {
         await esperar(() => !ligaDB('Oficio del municipio') && actividad('desligar').length === 1, 'liga quitada');
         R.ok('quitar: DELETE en PROY_Ligas y «desligó «…»» en la bitácora', escrituras().some(c => c === `DELETE /sites/sitio-falso/lists/lista-ligas/items/${en.id}`) && actividad('desligar')[0].fields.Title === 'desligó «Oficio del municipio»', actividad('desligar')[0].fields.Title);
 
+        // 11.5b v0.8.0: MOVER una liga a otra tarjeta (F1 de Proyectos) — confirma nombrando de dónde a dónde; cancelar no escribe
+        const selDe = id => document.querySelector(`#docsLista [data-tarjeta-de="${id}"]`);
+        const patchLigas = () => escrituras().filter(c => c.startsWith('PATCH') && c.includes('/lists/lista-ligas/'));
+        await esperar(() => selDe(lg2.id), 'el select de la liga recién ligada');
+        R.ok('mover liga: el select trae las tarjetas del proyecto y la actual puesta', selDe(lg2.id).value === String(tSin) && [...selDe(lg2.id).options].some(o => o.textContent === 'Esta semana mía') && [...selDe(lg2.id).options][0].textContent === 'el proyecto entero');
+        const nPL = patchLigas().length; const nLig = actividad('ligar').length;
+        { const s = selDe(lg2.id); s.value = String(tSemana); s.dispatchEvent(new Event('change', { bubbles: true })); }
+        await esperar(() => $('dlg').open, 'confirmación de mover');
+        R.ok('mover liga: pregunta nombrando de dónde a dónde', /Sin fecha mía/.test($('dlgTexto').textContent) && /Esta semana mía/.test($('dlgTexto').textContent) && $('dlgOk').textContent === 'Mover', $('dlgTexto').textContent);
+        clic('dlgCancelar'); await dormir(40);
+        R.ok('mover liga: cancelar no escribe y el select vuelve a la tarjeta actual', patchLigas().length === nPL && ligaDB(lg2.fields.Title).fields.TareaId === tSin && selDe(lg2.id).value === String(tSin));
+        { const s = selDe(lg2.id); s.value = String(tSemana); s.dispatchEvent(new Event('change', { bubbles: true })); }
+        await esperar(() => $('dlg').open, 'confirmación de mover 2'); const ifmL = DB.ifMatch;
+        clic('dlgOk');
+        await esperar(() => ligaDB(lg2.fields.Title).fields.TareaId === tSemana && actividad('ligar').length === nLig + 1, 'liga movida');
+        R.ok('mover liga: PATCH de solo TareaId con If-Match (esquema.json)', patchLigas().length === nPL + 1 && Object.keys(DB.ultimoPatch.ligas).join(',') === 'TareaId' && DB.ifMatch === ifmL + 1 && enEsquema(DB.ultimoPatch.ligas, 'PROY_Ligas').length === 0, JSON.stringify(DB.ultimoPatch.ligas));
+        R.ok('mover liga: «ligar» en la bitácora con la frase de Proyectos y la tarjeta nueva', actividad('ligar').at(-1).fields.Title === `pasó la liga «${lg2.fields.Title.slice(0, 60)}» a «Esta semana mía»` && actividad('ligar').at(-1).fields.TareaId === tSemana, actividad('ligar').at(-1).fields.Title);
+        await esperar(() => document.querySelector(`#docsLista .carpeta-docs[data-grupo="${tSemana}"] [data-liga="${lg2.id}"]`), 'en la carpeta nueva');
+        R.ok('mover liga: el documento cuelga ahora de la carpeta de su tarjeta, que se abre sola', document.querySelector(`#docsLista .nodo[data-nodo="${tSemana}"]`).getAttribute('aria-expanded') === 'true' && !!document.querySelector(`#docsLista [data-liga="${lg2.id}"]`).offsetParent && !!document.querySelector(`#docsFaltan [data-falta="${tSin}"]`));
+        // 412: alguien cambió la liga entre la lectura y el Mover → no se pisa, se relee
+        { const it = ligasDB().find(x => x.id === lg2.id); it.etag = (it.etag || 1) + 1; }
+        { const s = selDe(lg2.id); s.value = ''; s.dispatchEvent(new Event('change', { bubbles: true })); }
+        await esperar(() => $('dlg').open, 'confirmación (412)'); clic('dlgOk');
+        await esperar(() => avisoCon('Alguien cambió esa liga'), '412 de la liga');
+        R.ok('mover liga: el 412 no pisa ni deja bitácora', ligaDB(lg2.fields.Title).fields.TareaId === tSemana && actividad('ligar').length === nLig + 1);
+        await esperar(() => selDe(lg2.id), 'releída');
+        { const s = selDe(lg2.id); s.value = ''; s.dispatchEvent(new Event('change', { bubbles: true })); }
+        await esperar(() => $('dlg').open, 'confirmación (al proyecto)'); clic('dlgOk');
+        await esperar(() => !('TareaId' in ligaDB(lg2.fields.Title).fields) && actividad('ligar').length === nLig + 2, 'al proyecto entero');
+        R.ok('mover liga: «el proyecto entero» manda TareaId null y lo dice la bitácora', DB.ultimoPatch.ligas.TareaId === null && actividad('ligar').at(-1).fields.Title === `dejó la liga «${lg2.fields.Title.slice(0, 60)}» para el proyecto entero` && !('TareaId' in actividad('ligar').at(-1).fields), actividad('ligar').at(-1).fields.Title);
+
         // 11.6 La ficha: documentos de la tarjeta, enlace desde la ficha (vuelve a ella), nota y descripción
         document.querySelector('#tabsProyecto [data-tab="tablero"]').click(); await esperar(() => $('kanban'), 'tablero');
         const tColega = tarea('De la colega').id;
@@ -775,6 +882,21 @@ try {
         R.ok('nota: PROY_Actividad comentar con TareaId y ProyectoId (el renglón de Proyectos)', nota.Title === 'Revisar con el gestor' && nota.Quien === yo && nota.ProyectoId === lauP.id && enEsquema(nota, 'PROY_Actividad').length === 0, JSON.stringify(nota));
         await esperar(() => /Revisar con el gestor/.test($('fNotas').textContent), 'nota pintada');
         R.ok('nota: aparece en la ficha y el campo se vacía', $('fNota').value === '' && $('fNotasN').textContent === '1');
+        // 11.6b v0.8.0: BORRAR la nota propia (Proyectos v0.9.0) — pregunta encima de la ficha; cancelar no borra; sin renglón de bitácora
+        const notaId = filas('actividad').find(a => a.fields.Accion === 'comentar' && a.fields.TareaId === tColega).id;
+        R.ok('borrar nota: la propia trae «Borrar»', !!document.querySelector(`#fNotas [data-borrar-nota="${notaId}"]`));
+        document.querySelector(`#fNotas [data-borrar-nota="${notaId}"]`).click();
+        await esperar(() => $('dlg').open, 'confirmación de borrar la nota');
+        R.ok('borrar nota: pregunta nombrando la nota, con la ficha abajo', /Revisar con el gestor/.test($('dlgTexto').textContent) && $('dlgTitulo').textContent === 'Borrar la nota' && $('dlgFicha').open);
+        clic('dlgCancelar'); await dormir(40);
+        R.ok('borrar nota: cancelar no borra', !!filas('actividad').find(a => a.id === notaId) && !escrituras().some(c => c.startsWith('DELETE') && c.includes('/lists/lista-actividad/')));
+        const nActB = filas('actividad').length;
+        document.querySelector(`#fNotas [data-borrar-nota="${notaId}"]`).click();
+        await esperar(() => $('dlg').open, 'confirmación 2'); clic('dlgOk');
+        await esperar(() => !filas('actividad').find(a => a.id === notaId), 'nota borrada');
+        R.ok('borrar nota: DELETE de ese renglón de PROY_Actividad y nada más (ni bitácora del borrado)', escrituras().filter(c => c.startsWith('DELETE') && c.includes('/lists/lista-actividad/')).join('|') === `DELETE /sites/sitio-falso/lists/lista-actividad/items/${notaId}` && filas('actividad').length === nActB - 1);
+        await esperar(() => !/Revisar con el gestor/.test($('fNotas').textContent), 'nota fuera de la ficha');
+        R.ok('borrar nota: sale de la ficha, que sigue abierta, y el aviso lo dice', $('dlgFicha').open && /Sin notas todavía/.test($('fNotas').textContent) && $('fNotasN').textContent === '' && !!avisoCon('Nota borrada'));
         poner('fDesc', 'Descripción editada en el ERP');
         R.ok('descripción: cambia el botón a «Guardar cambios»', !$('fGuardar').disabled && $('fGuardar').textContent === 'Guardar cambios');
         $('formFicha').requestSubmit();
@@ -783,6 +905,8 @@ try {
         $('fCerrar').click(); await esperar(() => !$('dlgFicha').open, 'ficha cerrada');
         tarjetaDe('Esta semana mía').click(); await esperar(() => $('dlgFicha').open, 'ficha con nota sembrada');
         R.ok('ficha: las notas de otros se ven con su autor', /Nota sembrada en esta semana/.test($('fNotas').textContent) && /Colega/.test($('fNotas').textContent) && /Informe de campo/.test($('fDocs').textContent));
+        if (ROL === 'gerencia') R.ok('borrar nota (gerencia, v0.8.0): también la de otra persona trae «Borrar»', !!document.querySelector('#fNotas [data-borrar-nota]'));
+        else R.ok('borrar nota (colaborador, v0.8.0): la de otra persona NO trae «Borrar»', !document.querySelector('#fNotas [data-borrar-nota]'));
         $('fCerrar').click(); await esperar(() => !$('dlgFicha').open, 'ficha cerrada');
 
         // 11.7 Equipo tras escribir: quien escribió ya cuenta
@@ -800,6 +924,12 @@ try {
         R.ok('lectura: forzar Enlace → no abre', !$('dlgEnlace').open);
         const quito = await AR.quitarLiga({ ...ligaDB('Oficio ASEA (correo del gestor)').fields, id: lgEnlace });
         R.ok('lectura: forzar Quitar → se niega sin preguntar', quito === false && !$('dlg').open && !!ligaDB('Oficio ASEA (correo del gestor)'));
+        const movio2 = await AR.reasignarLiga({ id: lgArch }, String(tSemana));
+        R.ok('lectura (v0.8.0): forzar «Mover a» → se niega sin preguntar', movio2 === false && !$('dlg').open && ligaDB('2025-06-20_MINSA_plan-contingencia_rev01.pdf').fields.TareaId === tVencida);
+        const CM = await import('./comun.js');
+        const notaSembrada = filas('actividad').find(a => a.fields.Accion === 'comentar');
+        const borro = await CM.borrarComentario({ ...notaSembrada.fields, id: notaSembrada.id }, { ...lauP.fields, id: lauP.id });
+        R.ok('lectura (v0.8.0): forzar borrar una nota → se niega sin preguntar', borro === false && !$('dlg').open && !!filas('actividad').find(a => a.id === notaSembrada.id));
         R.ok('lectura: CERO escrituras también con Archivos', escrituras().length === 0, escrituras().join(' | '));
     }
     for (const d of document.querySelectorAll('dialog[open]')) d.close();

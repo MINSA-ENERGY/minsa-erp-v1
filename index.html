@@ -28,7 +28,7 @@
 </head>
 <body>
 
-<!-- ERP v0.6.0 (Gastos: gastos.js y el dialogo dlgGasto) · v0.5.0 (Archivos, Documentos del proyecto, Equipo; la ficha con descripcion, documentos y notas) · v0.3.0 (escrituras del kanban: dialogos al final) · v0.2.0 — fase 4, arranque: armazon (rail que colapsa a pestañas, tema claro/oscuro, ruta por hash), Inicio · Mis
+<!-- ERP v0.8.0 (ficha: color, subir/bajar, «crear y otra», borrar nota; Documentos: mover una liga de tarjeta y el arbol plegable) · v0.6.0 (Gastos: gastos.js y el dialogo dlgGasto) · v0.5.0 (Archivos, Documentos del proyecto, Equipo; la ficha con descripcion, documentos y notas) · v0.3.0 (escrituras del kanban: dialogos al final) · v0.2.0 — fase 4, arranque: armazon (rail que colapsa a pestañas, tema claro/oscuro, ruta por hash), Inicio · Mis
      pendientes, Proyectos y el tablero de un proyecto (solo lectura). Archivos, Gastos y Equipo: «en construcción». -->
 <section id="pantallaEntrar" class="entrar">
   <img class="logo solo-claro" src="./marca/lockup.svg" alt="MINSA ENERGY" width="724" height="256">
@@ -87,9 +87,11 @@
         <div class="mn-field"><label for="ntAsignado">Asignado</label><select id="ntAsignado"></select></div>
         <div class="mn-field"><label for="ntVence">Vence</label><input id="ntVence"></div>
       </div>
+      <div id="ntColorCampo" class="mn-field"><span id="ntColorEtq" class="etq-campo">Color</span><div id="ntColor" class="tonos" aria-labelledby="ntColorEtq"></div></div>
       <div class="mn-field"><label for="ntDesc">Descripción</label><textarea id="ntDesc" rows="3" placeholder="Opcional"></textarea></div>
     </div>
-    <div class="mn-dialog-foot"><button id="ntCancelar" class="mn-btn" type="button">Cancelar</button><button id="ntGuardar" class="mn-btn" type="submit" disabled>Falta el título</button></div>
+    <!-- v0.8.0: «Crear y otra» (C1 de Proyectos) guarda y deja el dialogo abierto con cubeta, asignado, prioridad, vence y color -->
+    <div class="mn-dialog-foot"><button id="ntCancelar" class="mn-btn" type="button">Cancelar</button><button id="ntGuardarYOtra" class="mn-btn" type="button" disabled>Crear y otra</button><button id="ntGuardar" class="mn-btn" type="submit" disabled>Falta el título</button></div>
   </form>
 </dialog>
 
@@ -105,8 +107,10 @@
         <div class="mn-field"><label for="fPrioridad">Prioridad</label><select id="fPrioridad"><option value="alta">Alta</option><option value="normal">Normal</option><option value="baja">Baja</option></select></div>
       </div>
       <div class="mn-field"><label for="fVence">Vence</label><input id="fVence"></div>
+      <div id="fColorCampo" class="mn-field"><span id="fColorEtq" class="etq-campo">Color</span><div id="fColor" class="tonos" aria-labelledby="fColorEtq"></div></div>
       <div class="mn-field"><label for="fDesc">Descripción</label><textarea id="fDesc" rows="3" placeholder="Opcional"></textarea></div>
-      <div id="fMoverCaja" class="mover-caja"><div class="lbl">Mover a</div><div id="fMover" class="mover" role="group" aria-label="Mover a otra cubeta"></div></div>
+      <!-- v0.8.0: color (arriba) y el lugar en la cubeta con Subir / Bajar (F11 de Proyectos) -->
+      <div id="fMoverCaja" class="mover-caja"><div class="lbl">Mover a</div><div id="fMover" class="mover" role="group" aria-label="Mover a otra cubeta"></div><div id="fOrden" class="orden oculto" role="group" aria-label="Lugar en la cubeta"></div></div>
       <!-- v0.5.0: documentos y notas de la tarjeta (archivos.js y la bitacora PROY_Actividad, Accion=comentar) -->
       <section class="ficha-sec" aria-labelledby="fDocsCab"><div class="lbl" id="fDocsCab">Documentos <span id="fDocsN" class="n"></span></div><div id="fDocs" class="docs-ficha"></div><div id="fDocsAltas"></div></section>
       <section class="ficha-sec" aria-labelledby="fNotasCab"><div class="lbl" id="fNotasCab">Notas <span id="fNotasN" class="n"></span></div><div id="fNotas" class="notas"></div>

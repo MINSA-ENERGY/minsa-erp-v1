@@ -190,7 +190,7 @@ export function pintarProyecto(v, p, nav, pestanaP = 'tablero') {
 function columnaKanban(p, nombre, tarjetas, clase, clave, color) {
     const col = el('section', 'kcol ' + clase); col.dataset.columna = clave;
     hacerReceptora(col, clave, p);   // «Sin cubeta» (clave vacia) no recibe
-    if (colorValido(color)) col.dataset.color = colorValido(color);
+    if (colorValido(color)) col.dataset.tono = colorValido(color);   // v0.8.0: data-tono, el atributo que pinta estilo.css (antes data-color, sin regla)
     const h = el('div', 'kcol-cab'); h.appendChild(el('h2', 'lbl', nombre)); h.appendChild(el('span', 'mn-chip', String(tarjetas.length)));
     col.appendChild(h);
     for (const t of ordenar(tarjetas)) col.appendChild(tarjetaKanban(t, p));
@@ -200,7 +200,7 @@ function columnaKanban(p, nombre, tarjetas, clase, clave, color) {
 function tarjetaKanban(t, p) {
     // v0.3.0: la tarjeta es un BOTON (abre su ficha; teclado incluido) y, si el rol mueve, se arrastra a otra cubeta.
     const c = el('button', 'kc'); c.type = 'button'; c.dataset.tarea = t.id;
-    if (colorValido(t.Color)) c.dataset.color = colorValido(t.Color);
+    if (colorValido(t.Color)) c.dataset.tono = colorValido(t.Color);   // v0.8.0: el color elegido en la ficha tiñe la tarjeta
     c.appendChild(el('span', 'titulo', t.Title || '(sin título)'));
     const pie = el('span', 'kc-pie');
     if (t.Asignado) {

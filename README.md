@@ -1,4 +1,4 @@
-# MINSA ERP — app (v0.7.0, fase 6: CFDI de gastos)
+# MINSA ERP — app (v0.8.0, cierre de la fase 4: ficha y Documentos completos)
 
 PWA del ERP de MINSA ENERGY (`erp.minsaenergy.com`). Sustituirá a MINSA Proyectos: mismo login de Entra
 (se **reusa su app registration**), mismas listas `PROY_*` del sitio Administración, cara nueva. El plan vive en
@@ -11,7 +11,7 @@ Copiado de `minsa-proyectos-app/app` **v0.160.0, commit `2489517`** (2026-10-01)
 
 | Traído tal cual | Ajustado | Nuevo en el ERP |
 |---|---|---|
-| `graph.js` · `reglas.js` · `lote.js` · `esquema.json` · `servidor-local.js` · `minsa-ui.css` · `vendor/` · `iconos/` · `marca/` · `_config.yml` · `.gitignore` · `.gitattributes` · `test/reglas.test.js` · `test/lote.test.js` · `test/vendor-vigente.js` | `comun.js` (VERSION; **v0.2.0: arreglo de `mesDia`**, ver abajo) · `config.js` (+`redirectProduccion`) · `sw.js` (caché `minsa-erp-v5` desde v0.5.0) · `manifest.json` · `CNAME` · `package.json` · `test/sw.test.js` · `test/datos.test.js` · `test/e2e.ps1` | `index.html` · `app.js` · `pantallas.js` (v0.2.0) · `estilo.css` · `test/pruebas.html` |
+| `graph.js` · `reglas.js` · `lote.js` · `esquema.json` · `servidor-local.js` · `minsa-ui.css` · `vendor/` · `iconos/` · `marca/` · `_config.yml` · `.gitignore` · `.gitattributes` · `test/reglas.test.js` · `test/lote.test.js` · `test/vendor-vigente.js` | `comun.js` (VERSION; **v0.2.0: arreglo de `mesDia`**, ver abajo) · `config.js` (+`redirectProduccion`) · `sw.js` (caché `minsa-erp-v<minor>`: `minsa-erp-v8` desde v0.8.0) · `manifest.json` · `CNAME` · `package.json` · `test/sw.test.js` · `test/datos.test.js` · `test/e2e.ps1` | `index.html` · `app.js` · `pantallas.js` (v0.2.0) · `estilo.css` · `test/pruebas.html` |
 
 **No se trajeron** las vistas de Proyectos (`vistas.js`, `tablero.js`, `capital.js`, `chat.js`, `docs.js`): se leyeron
 como referencia de qué campos pinta cada pantalla, y las del ERP se escriben nuevas en `pantallas.js`.
@@ -43,8 +43,8 @@ como referencia de qué campos pinta cada pantalla, y las del ERP se escriben nu
   colaborador crea, edita y mueve; solo gerencia borra. Proyecto cerrado: nada se escribe.
 - **412**: no se pisa — se releen las listas (`fijarReleer` en app.js), se avisa y la ficha abierta se repinta con lo nuevo.
 - **Esquema**: no cambia; la E2E coteja cada campo escrito contra `esquema.json` (PROY_Tareas y PROY_Actividad).
-- Lo que el ERP **no** porta todavía de la ficha de Proyectos: color en edición, subir/bajar orden, «crear y otra». Se editan
-  en MINSA Proyectos. (Descripción, notas y documentos llegaron en v0.5.0, abajo.)
+- ~~Lo que el ERP no portaba de la ficha de Proyectos: color en edición, subir/bajar orden, «crear y otra»~~: llegaron en
+  **v0.8.0** (abajo). (Descripción, notas y documentos llegaron en v0.5.0.)
 - **PENDIENTE de Carlos — escribir una vez en real por lista.** Desde aquí no hay tenant: nada de esto se ha escrito contra
   SharePoint real. Antes de usarlo en serio hay que crear, mover, editar y borrar una tarjeta de prueba en `PROY_Tareas`
   (y ver los 4 renglones en `PROY_Actividad`, y que Proyectos los pinte igual).
@@ -66,8 +66,8 @@ Lee `PROY_Proyectos`, `PROY_Tareas`, `PROY_Roles` (y las columnas reales de `PRO
 ## Pruebas
 
 ```
-npm test            # piel al día, selectores, comentarios, reglas (214), lote (27), gastos (58), sw, datos
-npm run test:e2e    # PowerShell + Edge headless, 6 corridas: v0.7.0 = gerencia 183 · colaborador 182 · lectura 110 · tesoreria 199 · contabilidad 197 · sin-gastos 149 (v0.6.0: 180 · 179 · 107 · 196 · — · 149)
+npm test            # piel al día, selectores, comentarios, reglas (214), lote (27), gastos (58), tonos (26, v0.8.0), sw, datos
+npm run test:e2e    # PowerShell + Edge headless, 6 corridas: v0.8.0 = gerencia 222 · colaborador 221 · lectura 122 · tesoreria 238 · contabilidad 236 · sin-gastos 188 (v0.7.0: 183 · 182 · 110 · 199 · 197 · 149)
 python ../herramientas-cfdi/test_cruce_cfdi.py   # v0.7.0: reglas del cruce con CFDI (25, una contra el índice real si está sincronizado)
 node ../herramientas-dev/capturas.mjs --salida ../docs/capturas/v<versión>   # 390/1366 × claro/oscuro, mide desborde
 ```
@@ -87,8 +87,12 @@ de este repo).
 ## Qué falta
 
 - Escribir una vez en real por lista (PENDIENTE de Carlos, arriba).
-- Fase 4, lo que sigue (no cupo en v0.5.0): en la ficha, color, subir/bajar orden y «crear y otra»; en Archivos, mover una
-  liga a otra tarjeta (F1 de Proyectos) y el árbol plegable de expediente (v0.33.0); borrar una nota.
+- ~~Fase 4, lo que sigue: en la ficha, color, subir/bajar orden y «crear y otra»; en Archivos, mover una liga a otra tarjeta
+  (F1 de Proyectos) y el árbol plegable de expediente (v0.33.0); borrar una nota~~: HECHO en **v0.8.0** (sección abajo), con
+  la paridad de la ficha y de Documentos cerrada. Queda fuera a propósito: el árbol en `#archivos` (Proyectos v0.36.0, una raíz
+  plegable por proyecto) y mover una liga desde `#archivos` o desde la ficha — ver «Qué NO se hizo» en v0.8.0.
+- **Escribir una vez en real** lo de v0.8.0 (PENDIENTE de Carlos): un color, un Subir/Bajar, un «Crear y otra», mover una liga
+  y borrar una nota, y ver que Proyectos lo pinta igual (sección v0.8.0).
 - **Escribir una vez en real en `PROY_Ligas`** (subir un lote al buzón de CALYTEK, ligar, pegar enlace, quitar) y ver que
   Proyectos lo pinta igual y que `/archivar-calytek` reconoce el lote (PENDIENTE de Carlos, como el de `PROY_Tareas`).
 - ~~Remoto~~: HECHO — repo público `MINSA-ENERGY/minsa-erp` + GitHub Pages; v0.7.0 publicada el 2026-10-02 (push de Carlos).
@@ -341,3 +345,98 @@ lista); para regresar un gasto, `CfdiEstado=sin-cfdi` y vaciar `CfdiUuid`/`CfdiC
   deja la cola vacía, así que `capturas.mjs` siembra antes dos gastos propuestos (`PREP`). Graph falso: ningún dato real.
 - **No probado**: nada contra el tenant real (login del script, lectura y PATCH de `ERP_Gastos`, el filtro `CfdiUuid eq`
   en SharePoint, la tarea programada, `-DescargarSat`).
+
+## v0.8.0 (2026-10-02) — cierre de la fase 4: la ficha y Documentos completos
+
+Lo que «Qué falta» llamaba *Fase 4, lo que sigue*, portado de MINSA Proyectos v0.160.0 (`tablero.js`, `docs.js`, `comun.js`)
+con la misma lógica. **Nada exigió cambiar `esquema.json` ni una columna de SharePoint**: `Color`, `Orden` y `TareaId` ya existen
+en `PROY_Tareas`/`PROY_Ligas`; borrar una nota es un DELETE; y ni reordenar ni borrar una nota escriben bitácora, así que
+`PROY_Actividad.Accion` (congelada, decisión 6) no cambia — mover una liga usa `ligar`, que ya existe.
+
+### Qué hace
+
+| Dónde | Qué | De dónde sale |
+|---|---|---|
+| Ficha · **Color** | Fila de 9 círculos (sin color + los 8 de `COLORES`), grupo de radios con flechas. Viaja en el mismo PATCH de «Guardar cambios», **solo si cambió**; «Sin color» manda `null`. La tarjeta del tablero se tiñe. | `selectorTonos` de `tablero.js` v0.12.0 |
+| Nueva tarea · **Color** y **«Crear y otra»** | El color se elige al crear. «Crear y otra» guarda y deja el diálogo abierto con cubeta, asignado, prioridad, vence y color; vacía título y descripción y devuelve el foco al título. Se enciende con el mismo criterio que «Crear tarea». | C1 de Proyectos v0.5.0 |
+| Ficha · **Subir / Bajar** | Bajo «Mover a»: «Lugar en la cubeta: N de M» con ↑ Subir / ↓ Bajar (solo si la cubeta tiene más de una). Renumera `Orden` en el orden visual (`reordenar` de `reglas.js`): la primera vez puede ser la cubeta entera (las sembradas no traen `Orden`), luego las dos que se cruzan. No toca lo que se está escribiendo en la ficha. | F11 de Proyectos |
+| Ficha · **Borrar una nota** | «Borrar» en la cabecera de la nota: la propia, o cualquiera si gerencia; proyecto activo. Pregunta antes (la confirmación sale encima de la ficha). | `borrarComentario` de `comun.js` (Proyectos v0.9.0) |
+| Documentos · **Mover a** | Bajo el nombre de cada documento, un select con las tarjetas del proyecto («el proyecto entero» arriba). Confirma nombrando de dónde a dónde; cancelar devuelve el select y no escribe. La carpeta de destino se abre sola. | F1 de `docs.js` (`reasignarLiga`, v0.34.0) |
+| Documentos · **árbol de expediente** | «Del proyecto» y una **carpeta por tarjeta** (título, cubeta, vencimiento, «N docs»; el icono toma el color de la tarjeta o el de su cubeta), que se pliega con un clic. **Nace todo plegado**; «Abrir todo» / «Plegar todo» se apagan cuando no tienen nada que hacer. Lo abierto sobrevive a los repintados mientras no se cambie de proyecto. | Proyectos v0.33.0 / v0.52.0 |
+| Tablero | La tarjeta y la cubeta con color elegido (aquí o en Proyectos) se tiñen: `pantallas.js` ya ponía `data-color` sin regla CSS; ahora es `data-tono`, el atributo que pinta `estilo.css`. | — |
+
+### Qué escribe y dónde
+
+| Acción | SharePoint | `PROY_Actividad` |
+|---|---|---|
+| Color (ficha) | `PROY_Tareas` PATCH con If-Match, solo `Color` (o junto con lo demás que cambió) | `editar-tarea` «editó «X»» (la misma de siempre) |
+| Crear con color / «Crear y otra» | `PROY_Tareas` POST, + `Color` si se eligió | `crear-tarea`, uno por tarjeta |
+| Subir / Bajar | `PROY_Tareas` PATCH con If-Match de solo `Orden`, uno por tarjeta que cambia | **ninguno** (como Proyectos) |
+| Mover una liga | `PROY_Ligas` PATCH con If-Match de solo `TareaId` (`null` = el proyecto entero) | `ligar` «pasó la liga «X» a «T»» / «dejó la liga «X» para el proyecto entero» (frases de Proyectos) |
+| Borrar una nota | `PROY_Actividad` DELETE de ese renglón (más sus ✓ «visto», best-effort) | **ninguno**: `Accion` está congelada; el renglón queda en la papelera del sitio |
+
+- **Roles**: lectura ve el color apagado, sin Subir/Bajar, sin «Mover a» ni «Borrar» — y `reordenarTarea`, `reasignarLiga` y
+  `borrarComentario` se niegan si se llaman a la fuerza (E2E). Colaborador borra solo sus notas; gerencia, cualquiera.
+- **412**: no se pisa — Subir/Bajar y Color pasan por el `conflicto` de la ficha (relee y repinta); mover una liga relee y avisa.
+
+### Defaults del implementador (se revierten en una línea)
+
+- **El árbol nace todo plegado** (la decisión de Carlos en Proyectos v0.52.0). Revertir: en `pintarDocsProyecto` (`archivos.js`),
+  iniciar `arbol.abiertas` con todas las `llaves` en vez de `new Set()`.
+- **Las tarjetas sin documentos NO entran al árbol** (Proyectos pone ahí un nodo «N tarjetas abiertas sin documentos»): el ERP
+  ya las enseña arriba en «Qué documentos faltan» (decisión de v0.5.0, maqueta). Sumarlas sería repetir la lista.
+- **Al mover una liga se abre la carpeta de destino**, para ver a dónde fue. Revertir: la línea `arbol.abiertas.add(…)` de
+  `reasignarLiga`.
+- **«Mover a» es un select visible bajo el nombre** (Proyectos v0.55.0 lo metió al menú «⋯»; el ERP no tiene ese menú) y solo
+  en Documentos del proyecto (como Proyectos: `#archivos` no reasigna). Revertir: quitar `moverEn: p` en `pintarDocsProyecto`.
+- **Paleta de tonos sin colores nuevos** (la paleta es decisión de Carlos, `deuda-declarada.txt`): azul = `--brand` (se aclara
+  solo en oscuro), celeste `--sky-600`, verde `--green-700`, ámbar `--amber-600`, rojo `--red-600`, gris `--slate-400`; **morado y
+  rosa**, que la paleta del ERP no trae (Proyectos usa dos hex propios), salen de **mezclar dos tokens** de ella con `color-mix`
+  (azul marca + rojo). Lo vigila `test/tonos.test.js`: ningún `--tono-*` con color literal. Revertir/ajustar: el bloque `:root`
+  de v0.8.0 en `estilo.css`.
+- **El tinte no toca el filete izquierdo** de la tarjeta (sigue diciendo la cubeta): solo fondo y los otros tres bordes. Revertir:
+  `.kc[data-tono]` en `estilo.css`.
+- **Sin la columna `Color` en la lista, el selector no se enseña** (`hayColor()` mira `estado.columnasTareas`; si no se pudieron
+  leer, se asume que sí, como Proyectos). Revertir: `hayColor` en `tarjetas.js`.
+- **«Crear y otra» conserva cubeta, asignado, prioridad, vence y color** y vacía título y descripción (lo de Proyectos más el color).
+  Revertir: la rama `seguirCapturando` de `guardarNueva`.
+- **Borrar una nota es un botón de texto «Borrar»** (Proyectos usa el icono de basura) y **pregunta con el diálogo de
+  confirmación encima de la ficha** (borrar una tarjeta sigue siendo de dos toques). Revertir: el bloque `puedeBorrarComentario`
+  de `pintarNotas`.
+- **Subir/Bajar dicen «↑ Subir» / «↓ Bajar» con texto** y van dentro de la caja «Mover a» (solo se ve si el rol mueve).
+
+### Qué NO se hizo (y por qué)
+
+- **El árbol en `#archivos`** (Proyectos v0.36.0: una raíz plegable por proyecto): el alcance era el árbol de expediente
+  (v0.33.0), que vive en Documentos del proyecto. `#archivos` sigue con su lista agrupada.
+- **Mover una liga desde la ficha o desde `#archivos`**: Proyectos tampoco lo hace desde `#archivos`; en la ficha, los
+  documentos ya son de esa tarjeta y Documentos lo resuelve.
+- **El color de las cubetas** (editor de cubetas de Proyectos v0.11.0/v0.12.0): no estaba en el alcance; el ERP solo **pinta** el
+  color que una cubeta ya trae.
+
+### Cómo revertir
+
+`git revert` del commit de v0.8.0 en este repo (no toca datos). Por partes: en `tarjetas.js`, `selectorTonos`, `hayColor`,
+`pintarOrden`/`reordenarTarea`, la rama `seguirCapturando` y el botón de `pintarNotas`; en `index.html`, `ntColorCampo`,
+`ntGuardarYOtra`, `fColorCampo` y `fOrden`; en `archivos.js`, `reasignarLiga`, `moverEn` de `filaLiga` y el árbol
+(`arbol`, `aplicarPliegue`) de `pintarDocsProyecto`; en `estilo.css`, el bloque v0.8.0; `test/tonos.test.js` y su renglón de
+`package.json`. Lo que ya se haya escrito en real (colores, `Orden`, ligas movidas, notas borradas) queda en SharePoint y
+Proyectos lo pinta igual: son las mismas columnas; una nota borrada se recupera de la papelera del sitio.
+
+### PENDIENTE de Carlos — escribir una vez en real
+
+Nada de v0.8.0 se ha escrito contra SharePoint real. Con una tarjeta de prueba: elegir un color (y ver que Proyectos la tiñe
+igual), Subir/Bajar en una cubeta de 2+, «Crear y otra» dos veces, mover un documento a otra tarjeta y de vuelta al proyecto, y
+borrar una nota propia (y que desaparezca también del chat de Proyectos).
+
+### Pruebas
+
+- `npm test`: + `test/tonos.test.js` (26: cada clave de `COLORES` con su token y su regla, ningún tono con color literal).
+- `npm run test:e2e`: gerencia 183 → **222** · colaborador 182 → **221** · lectura 110 → **122** · tesoreria 199 → **238** ·
+  contabilidad 197 → **236** · sin-gastos 149 → **188**. Nuevo: el color sembrado «desde Proyectos» tiñe la tarjeta y su carpeta;
+  el árbol (nace plegado, abrir uno, abrir/plegar todo); «Crear y otra» (POST con color, lo que se conserva, Orden + 1, foco);
+  color en la ficha (PATCH de solo `Color` con If-Match, «Sin color» = `null`); Subir/Bajar (numera la cubeta, luego dos,
+  sin bitácora, no pierde lo escrito); mover una liga (confirmar, cancelar, PATCH de solo `TareaId`, frase de bitácora, carpeta que
+  se abre, 412, al proyecto entero); borrar una nota (confirmar encima de la ficha, cancelar, DELETE único, sin bitácora; la ajena
+  solo gerencia); lectura: nada de eso, ni forzando.
+- Sin capturas nuevas en esta versión (no se corrió `capturas.mjs`).

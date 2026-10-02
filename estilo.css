@@ -430,3 +430,53 @@ button.kc:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; 
   .fila-tot [data-col="0"], .fila-tot [data-col="1"] { font-weight: 600; color: var(--text-strong); }
   .fila-tot [data-col="0"] .lbl-movil, .fila-tot [data-col="1"] .lbl-movil { display: none; }
 }
+
+/* ==== v0.8.0 — ficha (color, lugar en la cubeta, borrar nota) y Documentos (mover una liga, arbol de expediente) ==== */
+/* La paleta de tarjetas (COLORES de reglas.js, la MISMA clave que guarda Proyectos en PROY_Tareas.Color). Sin colores nuevos: cada
+   tono es un token de la paleta de arriba; morado y rosa —que la paleta del ERP no trae— salen de MEZCLAR dos tokens de ella
+   (color-mix, como .fico .doblez). El fondo suave de la tarjeta sale con color-mix sobre la superficie: en oscuro se atenua solo. */
+:root {
+  --tono-azul: var(--brand); --tono-celeste: var(--sky-600); --tono-verde: var(--green-700); --tono-ambar: var(--amber-600);
+  --tono-rojo: var(--red-600); --tono-gris: var(--slate-400);
+  --tono-morado: color-mix(in srgb, var(--blue-700) 55%, var(--red-600)); --tono-rosa: color-mix(in srgb, var(--red-600) 70%, var(--blue-700));
+}
+[data-tono="azul"] { --tono: var(--tono-azul); } [data-tono="celeste"] { --tono: var(--tono-celeste); } [data-tono="verde"] { --tono: var(--tono-verde); }
+[data-tono="ambar"] { --tono: var(--tono-ambar); } [data-tono="rojo"] { --tono: var(--tono-rojo); } [data-tono="morado"] { --tono: var(--tono-morado); }
+[data-tono="rosa"] { --tono: var(--tono-rosa); } [data-tono="gris"] { --tono: var(--tono-gris); }
+/* El filete izquierdo sigue diciendo la cubeta (.k-por-hacer .kc…): el tinte no lo toca. */
+.kc[data-tono] { background: color-mix(in srgb, var(--tono) 13%, var(--card)); border-top-color: color-mix(in srgb, var(--tono) 38%, var(--line-soft)); border-right-color: color-mix(in srgb, var(--tono) 38%, var(--line-soft)); border-bottom-color: color-mix(in srgb, var(--tono) 38%, var(--line-soft)); }
+.kcol[data-tono] { background: color-mix(in srgb, var(--tono) 9%, var(--sunken)); }
+.kcol[data-tono] .kcol-cab { border-bottom-color: var(--tono); }
+/* Selector de color: una fila de circulos, el elegido con anillo; «sin color» es un circulo hueco tachado. */
+.etq-campo { font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; font-weight: 600; color: var(--text-muted); }
+.tonos { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-height: 40px; }
+.tonos button { width: 28px; height: 28px; min-height: 0; padding: 0; border-radius: 50%; border: 2px solid transparent; background: var(--tono, transparent); cursor: pointer; box-shadow: 0 0 0 1px var(--line); }
+.tonos button[data-tono=""] { background: var(--card); position: relative; }
+.tonos button[data-tono=""]::after { content: ""; position: absolute; inset: 11px 2px auto 2px; height: 2px; background: var(--line); transform: rotate(-45deg); }
+.tonos button[aria-checked="true"] { border-color: var(--card); box-shadow: 0 0 0 2px var(--text-strong); }
+.tonos button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.tonos button:disabled { cursor: default; opacity: .55; }
+/* Lugar en la cubeta (Subir / Bajar) bajo «Mover a». */
+.dlg-erp .orden { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); }
+.dlg-erp .orden .lugar { margin-right: 4px; }
+/* Borrar una nota: a la derecha de su cabecera. */
+.nota-cab .borrar-nota { margin-left: auto; min-height: 28px; padding: 0 8px; color: var(--status-danger-fg); }
+/* Mover una liga a otra tarjeta (F1): bajo el nombre del documento. */
+.mover-liga { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; }
+.mover-liga select { min-height: 32px; max-width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text-strong); font: 500 13px var(--font-ui); padding: 0 8px; }
+/* Arbol de expediente: cada carpeta es un boton que pliega; el icono toma el color de la tarjeta o el de su cubeta (posicion). */
+.arbol-acciones { display: flex; gap: 8px; justify-content: flex-end; }
+.carpeta-docs .nodo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; width: 100%; padding: 8px 0; border: 0; border-bottom: 1px solid var(--line-soft); background: none; color: var(--text-strong); font: 500 14px var(--font-ui); text-align: left; cursor: pointer; }
+.carpeta-docs .nodo:hover .grupo-titulo { color: var(--brand); }
+.carpeta-docs .nodo:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.carpeta-docs .nodo svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.carpeta-docs .nodo .caret { color: var(--text-muted); transition: transform .15s; transform: rotate(90deg); }
+.carpeta-docs.is-plegada .nodo .caret { transform: none; }
+.carpeta-docs .nodo .carpeta { color: var(--idle-solid); }
+.carpeta-docs .nodo .carpeta.is-c { color: var(--brand); } .carpeta-docs .nodo .carpeta.is-r { color: var(--info-solid); } .carpeta-docs .nodo .carpeta.is-h { color: var(--ok-solid); }
+.carpeta-docs .nodo .carpeta[data-tono] { color: var(--tono); }
+.carpeta-docs .grupo-titulo { min-width: 0; overflow-wrap: anywhere; }
+.carpeta-docs .cubeta-de { font-size: 12px; color: var(--text-muted); }
+.carpeta-docs .nodo .n { margin-left: auto; font-size: 12px; color: var(--text-muted); }
+.carpeta-cuerpo { padding-left: 28px; }
+@media (max-width: 720px) { .carpeta-cuerpo { padding-left: 12px; } }
