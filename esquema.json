@@ -1,0 +1,113 @@
+{
+  "_que_es": "Esquema de las listas de SharePoint de la app de proyectos multiusuario MINSA Proyectos. Es la UNICA fuente: la lee herramientas-dev/provisionar.html para crearlas y app/graph.js para leerlas/escribirlas. Los nombres de columna son los INTERNOS (sin espacios ni acentos); el titulo visible va en 'titulo'. Las relaciones van por ID de renglon (numero), no por columna de busqueda: mas simple de leer por Graph y no obliga a crear las listas en orden. Viven en /sites/Administracion (decision del plan 2026-09-11: la app es dueña del estado; la KB liga).",
+  "version": 2,
+  "listas": [
+    {
+      "nombre": "PROY_Proyectos",
+      "titulo": "Proyectos (frentes con fin)",
+      "clave": "proyectos",
+      "regla": "decision 2: un proyecto es un FRENTE CON FIN (LAU ASEA-03-001, arranque de planta, servicio xileno OC-X). El equipo es la unidad que lo lleva: filtra, no restringe. Solo gerencia crea y cierra (decision 3). Cerrar es Estado=cerrado con sello; nada se borra.",
+      "columnas": [
+        { "nombre": "Title", "titulo": "Nombre del proyecto", "tipo": "text", "obligatorio": true },
+        { "nombre": "Clave", "titulo": "Clave (slug)", "tipo": "text", "obligatorio": true, "indexada": true, "nota": "minusculas, digitos y guiones; es lo que se pega en el marcador de la KB: `· app: lau-asea-03-001`. Unica: la app la rechaza si ya existe" },
+        { "nombre": "Equipo", "titulo": "Equipo (unidad)", "tipo": "choice", "opciones": ["CALYTEK", "PITEPEC", "RABASA", "Ventas Quimicos", "Ventas Ambiental", "Administracion"], "obligatorio": true, "indexada": true },
+        { "nombre": "Estado", "titulo": "Estado", "tipo": "choice", "opciones": ["activo", "cerrado"], "obligatorio": true, "indexada": true },
+        { "nombre": "Descripcion", "titulo": "Descripcion", "tipo": "note" },
+        { "nombre": "Vence", "titulo": "Fin del frente", "tipo": "dateTime" },
+        { "nombre": "Responsable", "titulo": "Responsable (correo)", "tipo": "text" },
+        { "nombre": "Carpeta", "titulo": "Carpeta destino en la biblioteca", "tipo": "text", "nota": "ruta relativa a la raiz de la biblioteca de la unidad donde la skill de archivar deberia acomodar lo que se sube desde Docs (p. ej. 03_Predios/Arrocera/Federal (ASEA) - LAU). Es una PROPUESTA en el _lote.json: la skill valida y Carlos da el OK. Vacia = el default de config.js" },
+        { "nombre": "CerradoPor", "titulo": "Cerrado por", "tipo": "text" },
+        { "nombre": "CerradoEl", "titulo": "Cerrado el", "tipo": "dateTime" },
+        { "nombre": "Notas", "titulo": "Notas", "tipo": "note" },
+        { "nombre": "Columnas", "titulo": "Cubetas del tablero (JSON)", "tipo": "note", "nota": "v0.11.0 (2026-09-12): las cubetas de ESTE proyecto, [{\"clave\":\"por-hacer\",\"nombre\":\"Por hacer\"}, ...]; vacia = las 4 de siempre (COLUMNAS_DEFAULT de reglas.js). La ultima es siempre `hecho` (renombrable, no se quita). Las edita gerencia desde «Cubetas» en el proyecto. En una lista ya provisionada se AGREGA con provisionar.html" },
+        { "nombre": "Salud", "titulo": "Estado del frente", "tipo": "choice", "opciones": ["en-tiempo", "en-riesgo", "atrasado"], "nota": "R-05 (v0.128.0, 2026-09-28): el estado DECLARADO del frente (project update de Linear), claves de SALUD en reglas.js. Lo cambia gerencia o el Responsable del proyecto desde el Resumen. Vacio = nadie lo ha declarado. En una lista ya provisionada se AGREGA con provisionar.html; mientras no exista, la tarjeta no aparece (estado.columnasProyectos)" },
+        { "nombre": "SaludNota", "titulo": "Nota del estado", "tipo": "text", "nota": "R-05: una frase de hasta 140 caracteres (MAX_NOTA_SALUD)" },
+        { "nombre": "SaludPor", "titulo": "Estado puesto por (correo)", "tipo": "text" },
+        { "nombre": "SaludEl", "titulo": "Estado puesto el", "tipo": "dateTime" }
+      ]
+    },
+    {
+      "nombre": "PROY_Tareas",
+      "titulo": "Tareas (tarjetas del tablero)",
+      "clave": "tareas",
+      "regla": "decision 1: la app es DUEÑA del estado (asignado, columna, vence). Las cubetas las declara cada proyecto (PROY_Proyectos.Columnas, v0.11.0); antes eran cuatro fijas. Al entrar a 'hecho' se sella HechoPor/HechoEl; al salir se limpia. Cualquier colaborador crea, asigna y mueve; solo gerencia borra.",
+      "columnas": [
+        { "nombre": "Title", "titulo": "Tarea (verbo + objeto)", "tipo": "text", "obligatorio": true },
+        { "nombre": "ProyectoId", "titulo": "ID del proyecto", "tipo": "number", "obligatorio": true, "indexada": true },
+        { "nombre": "Columna", "titulo": "Columna", "tipo": "choice", "opciones": ["por-hacer", "en-curso", "en-revision", "hecho"], "libre": true, "obligatorio": true, "indexada": true, "nota": "`libre` = allowTextEntry: desde v0.11.0 acepta la clave de cualquier cubeta del proyecto (slug), no solo las 4 opciones. En una lista ya provisionada provisionar.html lo aplica por PATCH" },
+        { "nombre": "Asignado", "titulo": "Asignado (correo)", "tipo": "text", "indexada": true, "nota": "siempre alguien de la casa (decision del plan 14:05): aunque la pelota este en un tercero, la tarjeta la tiene quien lo persigue" },
+        { "nombre": "Vence", "titulo": "Vence", "tipo": "dateTime", "indexada": true },
+        { "nombre": "Prioridad", "titulo": "Prioridad", "tipo": "choice", "opciones": ["alta", "normal", "baja"] },
+        { "nombre": "Orden", "titulo": "Orden dentro de la columna", "tipo": "number" },
+        { "nombre": "Descripcion", "titulo": "Descripcion", "tipo": "note" },
+        { "nombre": "Origen", "titulo": "Origen en la KB", "tipo": "text", "nota": "puntero al marcador o renglon de minsa-energy/, p. ej. ambiental/calytek/lau-entregables-gestor.md#renglon-7. Solo lectura para la gente; lo usa /procesar-tablero" },
+        { "nombre": "Desde", "titulo": "En esta columna desde", "tipo": "dateTime", "nota": "se reescribe en cada movimiento; base de «sin movimiento N dias»" },
+        { "nombre": "HechoPor", "titulo": "Hecho por", "tipo": "text" },
+        { "nombre": "HechoEl", "titulo": "Hecho el", "tipo": "dateTime" },
+        { "nombre": "Notas", "titulo": "Notas", "tipo": "note" },
+        { "nombre": "Color", "titulo": "Color de la tarjeta", "tipo": "text", "nota": "v0.12.0 (2026-09-12): clave de la paleta COLORES de reglas.js (azul, celeste, verde, ambar, rojo, morado, rosa, gris) o vacio. Solo tiñe la tarjeta; no cambia nada mas. En una lista ya provisionada se AGREGA con provisionar.html" },
+        { "nombre": "AsignadoPor", "titulo": "Asignado por (correo)", "tipo": "text", "nota": "C-02 (v0.91.0, 2026-09-18): quien hizo la ULTIMA asignacion (se escribe junto con Asignado al crear y al reasignar; null al desasignar). «Las que delegué» lo lee de la tarjeta y ya no depende de la bitacora acotada a 90 dias. En una lista ya provisionada se AGREGA con provisionar.html; mientras no exista, la app no lo manda (estado.columnasTareas)" }
+      ]
+    },
+    {
+      "nombre": "PROY_Ligas",
+      "titulo": "Ligas a documentos",
+      "clave": "ligas",
+      "regla": "decision 4: docs = LIGAS a archivos ya archivados en la biblioteca de la unidad (solo lectura) + lo subido al buzon 99_Pendiente-Archivar con _lote.json. «En el buzon» se DERIVA en vivo (GET drive/root:/<Ruta>: 404 = ya lo acomodo la skill); nadie lo actualiza a mano. N ligas por tarea, por eso es lista aparte.",
+      "columnas": [
+        { "nombre": "Title", "titulo": "Nombre del documento", "tipo": "text", "obligatorio": true },
+        { "nombre": "ProyectoId", "titulo": "ID del proyecto", "tipo": "number", "obligatorio": true, "indexada": true },
+        { "nombre": "TareaId", "titulo": "ID de la tarea", "tipo": "number", "nota": "opcional: una liga puede ser del proyecto entero" },
+        { "nombre": "Tipo", "titulo": "Tipo", "tipo": "choice", "opciones": ["archivado", "buzon", "enlace"], "obligatorio": true, "nota": "«enlace» nacio en v0.3.0 (F4): titulo + Url pegada, sin Unidad/Ruta/DriveItemId — un correo, un oficio, una biblioteca fuera del piloto. En una lista ya provisionada se AGREGA con provisionar.html" },
+        { "nombre": "Unidad", "titulo": "Unidad (biblioteca)", "tipo": "text", "nota": "clave de config.js: CALYTEK, PITEPEC, RABASA, LEGAL, FINANZAS" },
+        { "nombre": "Ruta", "titulo": "Ruta relativa a la raiz de la biblioteca", "tipo": "text" },
+        { "nombre": "Url", "titulo": "Liga web", "tipo": "text" },
+        { "nombre": "DriveItemId", "titulo": "ID del elemento en la biblioteca", "tipo": "text" },
+        { "nombre": "LigadoPor", "titulo": "Ligado por", "tipo": "text" }
+      ]
+    },
+    {
+      "nombre": "PROY_Roles",
+      "titulo": "Roles de la app",
+      "clave": "roles",
+      "regla": "decision 3: gerencia (crea/cierra proyectos, borra tarjetas), colaborador (crea, asigna, mueve, liga, sube), lectura (solo ve). Copia de PLANTA_Roles con los 3 roles nuevos; sin herencia de permisos, Members = Read. La app lo aplica en pantalla y en las funciones de guardar; quien escribe de verdad lo decide SharePoint.",
+      "columnas": [
+        { "nombre": "Title", "titulo": "Correo", "tipo": "text", "obligatorio": true },
+        { "nombre": "Nombre", "titulo": "Nombre", "tipo": "text" },
+        { "nombre": "Rol", "titulo": "Rol", "tipo": "choice", "opciones": ["gerencia", "colaborador", "lectura"], "obligatorio": true },
+        { "nombre": "Activo", "titulo": "Activo", "tipo": "boolean" },
+        { "nombre": "Visto", "titulo": "Visto", "tipo": "note", "nota": "v0.15.0 (2026-09-13): la marca de lectura de ESTA persona, compartida entre sus dispositivos: JSON {\"inicio\": iso, \"chat\": {\"<ProyectoId>\": iso}}. La escribe la propia app y solo sobre el renglon propio; vacia = nada visto. Sin la columna la app cae a localStorage (por dispositivo) sin fallar." }
+      ]
+    },
+    {
+      "nombre": "PROY_Actividad",
+      "titulo": "Actividad (quien hizo que)",
+      "clave": "actividad",
+      "regla": "«actividad reciente» necesita verbos y secuencia, no solo lastModifiedBy. Un renglon por accion, escrito best-effort DESPUES de cada escritura exitosa: si falla, la accion ya quedo y solo se pierde la bitacora. Es la metrica de vida del piloto: renglones con Quien != Carlos a 2 semanas.",
+      "columnas": [
+        { "nombre": "Title", "titulo": "Que paso (frase)", "tipo": "text", "obligatorio": true },
+        { "nombre": "ProyectoId", "titulo": "ID del proyecto", "tipo": "number", "indexada": true },
+        { "nombre": "TareaId", "titulo": "ID de la tarea", "tipo": "number" },
+        { "nombre": "Accion", "titulo": "Accion", "tipo": "choice", "opciones": ["crear-proyecto", "editar-proyecto", "cerrar-proyecto", "crear-tarea", "editar-tarea", "mover-tarea", "borrar-tarea", "ligar", "subir", "desligar", "comentar", "reabrir-proyecto", "borrar-proyecto", "visto"], "obligatorio": true, "nota": "«desligar» y «comentar» nacieron en v0.2.0 (2026-09-11) y «reabrir-proyecto» en v0.3.0 (F6) y «borrar-proyecto» en v0.13.0 (2026-09-12): en una lista ya provisionada se AGREGAN con provisionar.html (PATCH de opciones, idempotente). «comentar» es la nota de una tarjeta: el texto va en Title (255 max) y se pinta en el dialogo de la tarjeta. «visto» (v0.15.0, 2026-09-13) es la reaccion ✓ a un comentario del chat: Title = id del comentario, ProyectoId el del frente, sin TareaId; un renglon por persona y quitarlo es borrarlo" },
+        { "nombre": "Quien", "titulo": "Quien (correo)", "tipo": "text", "obligatorio": true },
+        { "nombre": "Cuando", "titulo": "Cuando", "tipo": "dateTime", "obligatorio": true, "indexada": true }
+      ]
+    },
+    {
+      "nombre": "PROY_Capital",
+      "titulo": "Capital de trabajo (partidas estimadas)",
+      "clave": "capital",
+      "regla": "v0.100.0 (2026-09-25, pedido de Carlos: «cuánto capital de trabajo falta / es necesario»): una partida ESTIMADA por renglon, ligada a un proyecto. Necesidad = dinero que el frente va a pedir; fondeo = dinero que ya lo cubre. Por proyecto: Necesario = Σ necesidades, Cubierto = Σ fondeos, Falta = max(0, Necesario − Cubierto); Ya pagado = Σ necesidades en «pagado». Solo MXN. Solo gerencia la ve y la edita (dato financiero); los Miembros del sitio no deberian tener lectura sobre ella. Sin bitacora en PROY_Actividad (su choice Accion no tiene opcion para esto y la actividad la lee todo el equipo). Mientras la lista no exista, la seccion Capital lo dice y el resto de la app funciona igual.",
+      "columnas": [
+        { "nombre": "Title", "titulo": "Concepto", "tipo": "text", "obligatorio": true },
+        { "nombre": "ProyectoId", "titulo": "ID del proyecto", "tipo": "number", "obligatorio": true, "indexada": true },
+        { "nombre": "Tipo", "titulo": "Tipo", "tipo": "choice", "opciones": ["necesidad", "fondeo"], "obligatorio": true },
+        { "nombre": "Monto", "titulo": "Monto (MXN)", "tipo": "number", "obligatorio": true },
+        { "nombre": "Categoria", "titulo": "Categoria", "tipo": "choice", "opciones": ["operación", "mantenimiento", "equipo", "permisos", "personal", "logística", "otro"], "libre": true },
+        { "nombre": "Fecha", "titulo": "Fecha estimada", "tipo": "dateTime", "nota": "cuando se necesita el dinero (necesidad) o cuando entra (fondeo); opcional. Base del corte por mes" },
+        { "nombre": "Estado", "titulo": "Estado", "tipo": "choice", "opciones": ["estimado", "comprometido", "pagado"], "obligatorio": true },
+        { "nombre": "Notas", "titulo": "Notas", "tipo": "note" }
+      ]
+    }
+  ]
+}

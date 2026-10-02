@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f7f7f7">
+<!-- CSP estricta, la misma de MINSA Proyectos v0.160.0: sin scripts ni estilos en linea, Trusted Types con UNA politica
+     (minsa-sw, la crea app.js para registrar el service worker). Las fuentes van vendorizadas en ./vendor/fuentes (OFL). -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self';
+  style-src 'self';
+  img-src 'self' blob: data:;
+  font-src 'self';
+  connect-src 'self' https://graph.microsoft.com https://login.microsoftonline.com https://minsaenergy.sharepoint.com;
+  frame-src https://login.microsoftonline.com;
+  form-action 'none';
+  base-uri 'none';
+  object-src 'none';
+  require-trusted-types-for 'script';
+  trusted-types minsa-sw">
+<title>MINSA ERP</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./iconos/icono-192.png">
+<link rel="apple-touch-icon" href="./iconos/icono-192.png">
+<link rel="stylesheet" href="./minsa-ui.css">
+<link rel="stylesheet" href="./estilo.css">
+</head>
+<body>
+
+<!-- ERP v0.1.0 — ESQUELETO: solo la entrada con Entra (MSAL por redireccion, motor de Proyectos) y una tarjeta que
+     prueba que el motor lee las listas PROY_*. Las pantallas reales (rail, Inicio, Proyectos, Archivos, Gastos) son la fase 4. -->
+<main class="esqueleto">
+  <img class="logo solo-claro" src="./marca/lockup.svg" alt="MINSA ENERGY" width="724" height="256">
+  <img class="logo solo-oscuro" src="./marca/lockup-oscuro.svg" alt="MINSA ENERGY" width="724" height="256">
+  <div id="avisos" role="status" aria-live="polite"></div>
+
+  <section id="pantallaEntrar" class="mn-card">
+    <h1>ERP — esqueleto v0.1.0</h1>
+    <p>Proyectos, pendientes, archivos y gastos, para todo el equipo.</p>
+    <button id="btnEntrar" class="mn-btn is-primary is-block" type="button" disabled>Entrar con mi cuenta de MINSA</button>
+    <p id="textoEntrar" class="mn-label pista" role="status" aria-live="polite">MINSA · ERP</p>
+  </section>
+
+  <section id="pantallaSesion" class="mn-card oculto">
+    <h1 id="titulo">ERP — esqueleto v0.1.0</h1>
+    <p id="quien"></p>
+    <p class="pista">Listas del sitio Administración que lee el motor:</p>
+    <ul id="listas" class="listas"></ul>
+    <button id="btnSalir" class="mn-btn" type="button">Salir</button>
+  </section>
+
+  <p class="pie mn-mono" id="pie"></p>
+</main>
+
+<script src="./vendor/msal-browser.min.js" integrity="sha256-px+JPcPJ+jxZIZ4FNatqAKYoGGDyQxWrgRgwS6r6zGQ="></script>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

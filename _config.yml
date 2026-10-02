@@ -1,0 +1,5 @@
+exclude:
+  - test
+  - servidor-local.js
+  - package.json
+  - README.md

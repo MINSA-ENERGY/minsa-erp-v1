@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Pruebas de extremo a extremo — MINSA ERP (esqueleto)</title>
+<!-- ERP v0.1.0. Corre la app REAL (index.html + app.js) contra un Graph FALSO en memoria y un MSAL falso.
+     El MSAL falso, el Graph falso y la bitacora son COPIA LITERAL de minsa-proyectos-app/app/test/pruebas.html
+     (v0.160.0, lineas 35-256); los escenarios de abajo son los del esqueleto: entrar y leer las listas PROY_*.
+     Los ~2,800 renglones de escenarios de Proyectos prueban sus VISTAS (tablero, docs, chat, capital...), que no se
+     trajeron; vuelven por pantalla en la fase 4. Sin CSP a proposito (herramienta de desarrollo, _config.yml la
+     excluye de Pages). Se corre desde app/ con `npm run test:e2e` (PowerShell + Edge headless, 3 roles). -->
+<style>
+  body { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  #resultados { white-space: pre-wrap; background: #111; color: #ddd; padding: 1rem; }
+  #resultados .ok { color: #7fd48a; } #resultados .falla { color: #ff7b6b; font-weight: 700; } #resultados .nota { color: #ffd166; }
+</style>
+</head>
+<body>
+<pre id="resultados">arrancando…</pre>
+<div id="app-real"></div>
+
+<script>
+// ------------------------------------------------------------------ MSAL falso
+(function () {
+    const params = new URLSearchParams(location.search);
+    const cuenta = { username: params.get('quien') || (params.get('rol') || 'gerencia') + '@example.invalid', homeAccountId: 'x' };
+    const otra = { username: "otra@example.invalid", homeAccountId: "y" };
+    class PublicClientApplication {
+        constructor(cfg) { this.cfg = cfg; }
+        async initialize() {}
+        async handleRedirectPromise() { return { account: cuenta }; }   // C-09 (v0.159.0): vuelve del login con ESTA cuenta...
+        getAllAccounts() { return [otra, cuenta]; }   // ...y el cache trae otra primero: sin setActiveAccount la sesion quedaba a su nombre
+        setActiveAccount(a) { this.activa = a; }
+        getActiveAccount() { return this.activa || null; }
+        async acquireTokenSilent() { return { accessToken: 'token-falso' }; }
+        async loginRedirect() { window.__PRUEBAS.log('nota', 'loginRedirect llamado'); }
+        async logoutRedirect() { window.__PRUEBAS.log('nota', 'logoutRedirect llamado'); }
+    }
+    class InteractionRequiredAuthError extends Error { constructor(m) { super(m); this.errorCode = 'interaction_required'; } }
+    window.msal = { PublicClientApplication, InteractionRequiredAuthError };
+    window.__CUENTA = cuenta;
+    Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: {
+        controller: null, addEventListener() {}, register() { return Promise.resolve({ update() {} }); }
+    } });
+    window.confirm = () => true;
+})();
+
+// ------------------------------------------------------------------ Graph falso
+(function () {
+    const fetchReal = window.fetch.bind(window);
+    const G = 'https://graph.microsoft.com/v1.0';
+    const DESCARGA = 'https://minsaenergy.sharepoint.com/_descarga-falsa/';
+    // Dos sitios: el de las listas (Administracion) y la biblioteca de CALYTEK; el resto contesta 403.
+    const SITIOS = { '/sites/Administracion': 'sitio-falso', '/sites/Ambiental-CALYTEK': 'sitio-calytek' };
+    const DB = { listas: {}, carpetas: [], archivos: [], siguienteId: 1, esquema: null, fallas: [], llamadas: [], filtros: [], ifMatch: 0, textoLargo: [], itemsLeidos: [], descargas: [], sinAsignadoPor: false, sinSalud: false };   // sinSalud (R-05): PROY_Proyectos antes de provisionar Salud/SaludNota/SaludPor/SaludEl   // sinAsignadoPor: la lista viva ANTES de provisionar la columna (C-02)
+    window.__DB = DB;
+
+    function lista(id) { for (const l of Object.values(DB.listas)) if (l.id === id) return l; return null; }
+    function json(status, cuerpo) { return new Response(cuerpo === undefined ? null : JSON.stringify(cuerpo), { status, headers: { 'Content-Type': 'application/json' } }); }
+    function error(status, mensaje) { return json(status, { error: { code: 'falso', message: mensaje } }); }
+    // El webUrl que Graph da por un archivo de Office: Doc.aspx?sourcedoc={GUID}&file=<nombre>&action=default&mobileredirect=true(&DefaultItemOpen=1).
+    const webUrlDe = a => a.office ? `https://minsaenergy.sharepoint.com/sites/Ambiental-CALYTEK/_layouts/15/Doc.aspx?sourcedoc=%7B${(a.guid || '00000000-0000-0000-0000-000000000000').toUpperCase()}%7D&file=${a.nombre}&action=default&mobileredirect=true&DefaultItemOpen=1` : 'https://minsaenergy.sharepoint.com/' + a.ruta;
+    function validarChoices(l, campos) {
+        const esq = DB.esquema.listas.find(x => x.nombre === l.nombre);
+        for (const c of esq.columnas) {
+            if (c.tipo === 'choice' && !c.libre && campos[c.nombre] !== undefined && campos[c.nombre] !== null && !c.opciones.includes(campos[c.nombre]))
+                return `El valor "${campos[c.nombre]}" no es una opción de la columna ${c.nombre} (choice sin allowTextEntry)`;
+            // SharePoint: texto de una linea = 255; pasarse es un 400 «Invalid request» sin mas detalle (2026-09-12, LAU).
+            if (c.tipo === 'text' && typeof campos[c.nombre] === 'string' && campos[c.nombre].length > 255) { DB.textoLargo.push(`${l.nombre}.${c.nombre}=${campos[c.nombre].length}`); return 'Invalid request'; }
+        }
+        // C-02: como SharePoint, un campo que la lista no tiene es 400 aunque el resto del cuerpo sea valido.
+        if (DB.sinAsignadoPor && l.nombre === 'PROY_Tareas' && 'AsignadoPor' in campos) return "Field 'AsignadoPor' is not recognized";
+        if (DB.sinSalud && l.nombre === 'PROY_Proyectos') { const f = ['Salud', 'SaludNota', 'SaludPor', 'SaludEl'].find(k => k in campos); if (f) return `Field '${f}' is not recognized`; }
+        return null;
+    }
+    // Cada renglon lleva un eTag que sube en cada PATCH, como en SharePoint (v0.3.0, T1).
+    const etagDe = it => `"${it.etag || 1}"`;
+    function item(it) { return { id: String(it.id), eTag: etagDe(it), createdDateTime: it.creado || '2026-09-11T20:00:00Z', createdBy: { user: { email: it.creadoPor || window.__CUENTA.username, displayName: 'Quien sea' } }, lastModifiedDateTime: it.mod || '2026-09-11T20:00:00Z', fields: { ...it.fields, id: String(it.id) } }; }
+    const OPS = { eq: (a, b) => String(a ?? '') === String(b), ne: (a, b) => String(a ?? '') !== String(b), ge: (a, b) => String(a ?? '') >= String(b), gt: (a, b) => String(a ?? '') > String(b), le: (a, b) => String(a ?? '') <= String(b), lt: (a, b) => String(a ?? '') < String(b) };
+    function odata(filtro, campos) {
+        return filtro.split(/\s+or\s+/i).some(t => t.split(/\s+and\s+/i).every(c => {
+            const m = /^\s*fields\/([A-Za-z0-9_]+)\s+(eq|ne|ge|gt|le|lt)\s+(.+?)\s*$/.exec(c);
+            if (!m) throw new Error('clausula no soportada: ' + c);
+            const crudo = m[3].trim(); const valor = /^'.*'$/.test(crudo) ? crudo.slice(1, -1).replace(/''/g, "'") : crudo;
+            return OPS[m[2]](campos[m[1]], valor);
+        }));
+    }
+
+    window.fetch = async function (url, opts = {}) {
+        const u = String(url);
+        // v0.108.0: la liga de descarga pre-autenticada del recibo (`@microsoft.graph.downloadUrl`). Sin Authorization.
+        if (u.startsWith(DESCARGA)) {
+            DB.descargas.push({ url: u, auth: !!(opts.headers && (opts.headers.Authorization || opts.headers.authorization)) });
+            const a = DB.archivos.find(x => x.id === decodeURIComponent(u.slice(DESCARGA.length)));
+            return a ? new Response(a.texto || '', { status: 200 }) : error(404, 'descarga');
+        }
+        if (!u.startsWith(G)) return fetchReal(url, opts);
+        const metodo = (opts.method || 'GET').toUpperCase();
+        const ruta = u.slice(G.length);
+        DB.llamadas.push(`${metodo} ${ruta}`);
+        const f = DB.fallas.find(x => x.metodo === metodo && ruta.includes(x.incluye) && x.veces > 0);
+        if (f) { f.veces--; return error(f.status, `falla inyectada (${f.incluye})`); }
+        // C-16 (v0.140.0): retener UNA llamada hasta que la prueba suelte la promesa — el POST «a medio viaje».
+        if (DB.retener && DB.retener.metodo === metodo && ruta.includes(DB.retener.incluye)) { const r = DB.retener; DB.retener = null; await r.espera; }
+
+        let m;
+        if ((m = /^\/sites\/([^/]+):(\/[^?]+)$/.exec(ruta)) && metodo === 'GET') {
+            const id = SITIOS[m[2]]; return id ? json(200, { id }) : error(403, `Access denied (sin Sites.Selected sobre ${m[2]})`);
+        }
+        if (/^\/sites\/sitio-falso\/lists\?/.test(ruta) && metodo === 'GET')
+            return json(200, { value: Object.values(DB.listas).map(l => ({ id: l.id, name: l.nombre, displayName: l.nombre, webUrl: 'https://tenant.example.invalid/sites/Administracion/Lists/' + l.nombre })) });
+        if ((m = /^\/sites\/sitio-falso\/lists\/([^/]+)\/columns/.exec(ruta)) && metodo === 'GET') {   // C-02: las columnas reales, segun esquema.json (menos AsignadoPor si la lista «no esta provisionada»)
+            const l = lista(m[1]); if (!l) return error(404, 'lista');
+            const esq = DB.esquema.listas.find(x => x.nombre === l.nombre);
+            return json(200, { value: esq.columnas.filter(c => !(DB.sinAsignadoPor && c.nombre === 'AsignadoPor') && !(DB.sinSalud && l.nombre === 'PROY_Proyectos' && /^Salud/.test(c.nombre))).map(c => ({ name: c.nombre, displayName: c.titulo })) });
+        }
+        if ((m = /^\/sites\/sitio-falso\/lists\/([^/]+)\/items\?/.exec(ruta)) && metodo === 'GET') {
+            const l = lista(m[1]); if (!l) return error(404, 'lista');
+            const f2 = new URLSearchParams(ruta.slice(ruta.indexOf('?'))).get('$filter');
+            let items = l.items;
+            if (f2) { DB.filtros.push(f2); try { items = items.filter(it => odata(f2, it.fields)); } catch (e) { return error(400, 'el Graph falso no entiende el $filter: ' + f2); } }
+            return json(200, { value: items.map(item) });
+        }
+        if ((m = /^\/sites\/sitio-falso\/lists\/([^/]+)\/items$/.exec(ruta)) && metodo === 'POST') {
+            const l = lista(m[1]); if (!l) return error(404, 'lista');
+            const campos = JSON.parse(opts.body).fields;
+            const mal = validarChoices(l, campos); if (mal) return error(400, mal);
+            const it = { id: DB.siguienteId++, fields: { ...campos }, etag: 1 };
+            l.items.push(it);
+            return json(201, item(it));
+        }
+        if ((m = /^\/sites\/sitio-falso\/lists\/([^/]+)\/items\/(\d+)\/fields$/.exec(ruta)) && metodo === 'PATCH') {
+            const l = lista(m[1]); const it = l && l.items.find(x => x.id === Number(m[2]));
+            if (!it) return error(404, 'renglón');
+            const campos = JSON.parse(opts.body); (DB.ultimoPatch = DB.ultimoPatch || {})[Object.keys(DB.listas).find(k => DB.listas[k] === l)] = campos;   // C-07 (v0.96.0): la E2E afirma QUÉ campos viajan, por lista
+            const mal = validarChoices(l, campos); if (mal) return error(400, mal);
+            const ifMatch = opts.headers && (opts.headers['If-Match'] || opts.headers['if-match']);
+            if (ifMatch) { DB.ifMatch++; if (ifMatch !== etagDe(it)) return error(412, 'precondition failed: el renglón cambió'); }
+            for (const k in campos) { if (campos[k] === null) delete it.fields[k]; else it.fields[k] = campos[k]; }
+            it.etag = (it.etag || 1) + 1; it.mod = `2026-09-11T20:00:${String(it.etag).padStart(2, '0')}Z`;
+            return json(200, it.fields);
+        }
+        // v0.53.1: tras cada PATCH la app relee el eTag del item (GET chico) para que la SIGUIENTE escritura tambien lleve If-Match.
+        if ((m = /^\/sites\/sitio-falso\/lists\/([^/]+)\/items\/(\d+)\?\$select=id,eTag$/.exec(ruta)) && metodo === 'GET') {
+            const l = lista(m[1]); const it = l && l.items.find(x => x.id === Number(m[2]));
+            if (!it) return error(404, 'renglón');
+            DB.releidos = (DB.releidos || 0) + 1;
+            return json(200, { id: String(it.id), eTag: etagDe(it) });
+        }
+        if ((m = /^\/sites\/sitio-falso\/lists\/([^/]+)\/items\/(\d+)$/.exec(ruta)) && metodo === 'DELETE') {
+            const l = lista(m[1]); const i = l ? l.items.findIndex(x => x.id === Number(m[2])) : -1;
+            if (i < 0) return error(404, 'renglón');
+            l.items.splice(i, 1);
+            return new Response(null, { status: 204 });
+        }
+        // Biblioteca de CALYTEK: busqueda, existencia, carpetas, piezas.
+        if ((m = /^\/sites\/sitio-calytek\/drive\/root\/search\(q='([^']*)'\)/.exec(ruta)) && metodo === 'GET') {
+            const q = decodeURIComponent(m[1]).toLowerCase();
+            const v = DB.archivos.filter(a => a.nombre.toLowerCase().includes(q)).map(a => ({ id: a.id, name: a.nombre, file: {}, webUrl: webUrlDe(a), parentReference: a.sinPath ? { driveId: 'drive-falso', id: a.id } : { path: '/drive/root:/' + a.ruta.slice(0, a.ruta.lastIndexOf('/')) }, lastModifiedDateTime: '2026-09-01T12:00:00Z', size: a.bytes }));
+            return json(200, { value: v });
+        }
+        if ((m = /^\/sites\/sitio-calytek\/drive\/items\/([^/?]+)\?\$select=/.exec(ruta)) && metodo === 'GET') {
+            const a = DB.archivos.find(x => x.id === decodeURIComponent(m[1]));
+            if (!a) return error(404, 'itemNotFound');
+            DB.itemsLeidos.push(a.id);
+            return json(200, { id: a.id, name: a.nombre, webUrl: webUrlDe(a), parentReference: { path: '/drive/root:/' + a.ruta.slice(0, a.ruta.lastIndexOf('/')) }, sharepointIds: { listItemUniqueId: a.guid || '00000000-0000-0000-0000-000000000000' } });
+        }
+        if ((m = /^\/sites\/sitio-calytek\/drive\/root:\/(.+?)\?\$select=id$/.exec(ruta)) && metodo === 'GET') {
+            const r = decodeURIComponent(m[1]);
+            const c = DB.carpetas.find(x => x.ruta === r) || DB.archivos.find(x => x.ruta === r);
+            return c ? json(200, { id: c.id }) : error(404, 'itemNotFound');
+        }
+        // v0.108.0: un archivo por RUTA — con $select (itemPorRuta) o sin el (leerJson, que usa la liga de descarga).
+        if ((m = /^\/sites\/sitio-calytek\/drive\/root:\/([^?:]+)(\?\$select=id,name,webUrl,parentReference,sharepointIds,file)?$/.exec(ruta)) && metodo === 'GET') {
+            const a = DB.archivos.find(x => x.ruta === decodeURIComponent(m[1]));
+            if (!a) return error(404, 'itemNotFound');
+            if (m[2]) return json(200, { id: a.id, name: a.nombre, file: {}, webUrl: webUrlDe(a), parentReference: { path: '/drive/root:/' + a.ruta.slice(0, a.ruta.lastIndexOf('/')) }, sharepointIds: { listItemUniqueId: a.guid || '00000000-0000-0000-0000-000000000000' } });
+            return json(200, { id: a.id, name: a.nombre, size: a.bytes, file: {}, '@microsoft.graph.downloadUrl': DESCARGA + encodeURIComponent(a.id) });
+        }
+        if ((m = /^\/sites\/sitio-calytek\/drive\/root:\/(.+):\/children$/.exec(ruta)) && metodo === 'POST') {
+            const cuerpo = JSON.parse(opts.body);
+            let nombre = cuerpo.name; let n = 1;
+            while (DB.carpetas.find(c => c.ruta === decodeURIComponent(m[1]) + '/' + nombre)) nombre = `${cuerpo.name} ${++n}`;
+            const c = { id: 'carpeta-' + DB.siguienteId++, ruta: decodeURIComponent(m[1]) + '/' + nombre, nombre };
+            DB.carpetas.push(c);
+            return json(201, { id: c.id, name: nombre });
+        }
+        if ((m = /^\/sites\/sitio-calytek\/drive\/root:\/(.+):\/content$/.exec(ruta)) && metodo === 'PUT') {
+            const ruta2 = decodeURIComponent(m[1]);
+            const carpeta = ruta2.slice(0, ruta2.lastIndexOf('/'));
+            if (!DB.carpetas.find(c => c.ruta === carpeta)) return error(404, 'la carpeta no existe: ' + carpeta);
+            const bytes = opts.body ? (opts.body.byteLength || opts.body.length || 0) : 0;
+            const texto = opts.body && opts.body.byteLength ? new TextDecoder().decode(opts.body) : '';
+            DB.archivos.push({ id: 'archivo-' + DB.siguienteId++, ruta: ruta2, nombre: ruta2.slice(ruta2.lastIndexOf('/') + 1), bytes, texto });
+            return json(201, { name: ruta2.slice(ruta2.lastIndexOf('/') + 1) });
+        }
+        if ((m = /^\/sites\/sitio-calytek\/drive\/items\/([^/]+)$/.exec(ruta)) && metodo === 'DELETE') {
+            const c = DB.carpetas.find(x => x.id === m[1]);
+            const arch = !c && DB.archivos.find(x => x.id === decodeURIComponent(m[1]));   // v0.108.0: el recibo se borra por id
+            if (arch) { DB.archivos = DB.archivos.filter(x => x !== arch); return new Response(null, { status: 204 }); }
+            if (!c) return error(404, 'carpeta');
+            DB.carpetas = DB.carpetas.filter(x => x !== c);
+            DB.archivos = DB.archivos.filter(a => !a.ruta.startsWith(c.ruta + '/'));
+            return new Response(null, { status: 204 });
+        }
+        return error(500, `el Graph falso no conoce ${metodo} ${ruta}`);
+    };
+
+    window.__sembrar = function (esquema, rol) {
+        DB.esquema = esquema;
+        for (const l of esquema.listas) DB.listas[l.clave] = { id: 'lista-' + l.clave, nombre: l.nombre, items: [] };
+        const roles = DB.listas.roles.items;
+        roles.push({ id: DB.siguienteId++, fields: { Title: window.__CUENTA.username, Nombre: 'Persona de Prueba', Rol: rol, Activo: true } });
+        roles.push({ id: DB.siguienteId++, fields: { Title: 'colega@example.invalid', Nombre: 'Colega Demo', Rol: 'colaborador', Activo: true } });
+        roles.push({ id: DB.siguienteId++, fields: { Title: 'jefa@example.invalid', Nombre: 'Jefa Demo', Rol: 'gerencia', Activo: true } });
+        // Archivos "ya archivados" en la biblioteca de CALYTEK, para el buscador.
+        DB.archivos.push({ id: 'archivo-a1', ruta: '04_SGI/02_Ambiental/2025-06-20_MINSA_plan-contingencia_rev01.pdf', nombre: '2025-06-20_MINSA_plan-contingencia_rev01.pdf', bytes: 1000 });
+        DB.archivos.push({ id: 'archivo-a2', ruta: '99_Pendiente-Archivar/2026-09-01_algo/plan-contingencia-viejo.pdf', nombre: 'plan-contingencia-viejo.pdf', bytes: 10 });
+        // Dos mas para el reintento ante un 400 que no es de largo (a4) y el 400 persistente (a5); y uno del buzon sin path (a6).
+        DB.archivos.push({ id: 'archivo-l2', ruta: '04_SGI/02_Ambiental/2025-07-01_MINSA_matriz-riesgos_rev02.pdf', nombre: '2025-07-01_MINSA_matriz-riesgos_rev02.pdf', bytes: 900, guid: 'aaaaaaaa-0000-0000-0000-000000000004' });
+        DB.archivos.push({ id: 'archivo-l3', ruta: '04_SGI/02_Ambiental/2025-07-02_MINSA_matriz-aspectos_rev01.pdf', nombre: '2025-07-02_MINSA_matriz-aspectos_rev01.pdf', bytes: 900, guid: 'aaaaaaaa-0000-0000-0000-000000000005' });
+        DB.archivos.push({ id: 'archivo-l4', ruta: '99_Pendiente-Archivar/2026-09-02_otro/matriz-sin-path.pdf', nombre: 'matriz-sin-path.pdf', bytes: 9, sinPath: true });
+        // El caso del 2026-09-12: nombre de la convencion (77, sintetico del mismo largo), webUrl Doc.aspx de 268 y la busqueda SIN parentReference.path.
+        DB.archivos.push({ id: 'archivo-l1', ruta: '98_Archivo/2024-10-23_CALYTEK_Estudio_mercado-tema-de-ejemplo-sintetico-xx_borrador.docx', nombre: '2024-10-23_CALYTEK_Estudio_mercado-tema-de-ejemplo-sintetico-xx_borrador.docx', bytes: 5000, office: true, sinPath: true, guid: '8f2c4e1a-1111-2222-3333-444455556666' });
+        DB.carpetas.push({ id: 'carpeta-buzon', ruta: '99_Pendiente-Archivar', nombre: '99_Pendiente-Archivar' });
+    };
+})();
+
+// ------------------------------------------------------------------ bitacora de resultados
+(function () {
+    const pre = document.getElementById('resultados');
+    const R = { lineas: [], fallas: 0, oks: 0 };
+    R.log = (clase, texto) => { const s = document.createElement('span'); s.className = clase; s.textContent = `[${clase.toUpperCase()}] ${texto}\n`; pre.appendChild(s); R.lineas.push(`[${clase}] ${texto}`); };
+    R.ok = (nombre, cond, detalle) => { if (cond) { R.oks++; R.log('ok', nombre + (detalle ? ' — ' + detalle : '')); } else { R.fallas++; R.log('falla', nombre + (detalle ? ' — ' + detalle : '')); } };
+    R.cerrar = async () => {
+        const resumen = `${R.oks} ok · ${R.fallas} falla(s)`;
+        R.log(R.fallas ? 'falla' : 'ok', 'RESUMEN: ' + resumen);
+        document.title = 'PRUEBAS TERMINADAS: ' + resumen;
+        try { await fetch('/guardar', { method: 'POST', body: JSON.stringify({ resumen, rol: new URLSearchParams(location.search).get('rol') || 'gerencia', lineas: R.lineas, llamadas: window.__DB.llamadas.length }, null, 1) }); } catch (_) {}
+    };
+    window.__PRUEBAS = R;
+})();
+</script>
+
+<script type="module">
+const R = window.__PRUEBAS;
+const DB = window.__DB;
+const ROL = new URLSearchParams(location.search).get('rol') || 'gerencia';
+const $ = id => document.getElementById(id);
+const dormir = ms => new Promise(r => setTimeout(r, ms));
+async function esperar(fn, que, ms = 8000) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < ms) { try { const v = fn(); if (v) return v; } catch (_) {} await dormir(25); }
+    throw new Error('tiempo agotado esperando: ' + que);
+}
+const fila = nombre => document.querySelector(`#listas li[data-lista="${nombre}"] .n`)?.textContent;
+
+try {
+    // 1. Montar la app real dentro de esta pagina (igual que el arnes de Proyectos).
+    const html = await (await fetch('./index.html', { cache: 'reload' })).text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    for (const s of doc.querySelectorAll('script')) s.remove();
+    const cont = $('app-real');
+    for (const n of [...doc.body.childNodes]) cont.appendChild(document.adoptNode(n));
+    for (const href of ['./minsa-ui.css', './estilo.css']) { const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = href; document.head.appendChild(link); }
+    const esquema = await (await fetch('./esquema.json', { cache: 'reload' })).json();
+    window.__sembrar(esquema, ROL);
+    // Un proyecto y dos tareas, para que el conteo no sea solo de listas vacias.
+    DB.listas.proyectos.items.push({ id: DB.siguienteId++, fields: { Title: 'LAU CALYTEK', Clave: 'lau-demo' } });
+    for (const t of ['Tarea uno', 'Tarea dos']) DB.listas.tareas.items.push({ id: DB.siguienteId++, fields: { Title: t } });
+    // Con rol lectura se prueba ademas la tolerancia a PROY_Capital ausente (Proyectos la tolera; el esqueleto tambien).
+    const sinCapital = ROL === 'lectura';
+    if (sinCapital) delete DB.listas.capital;
+
+    // 2. Arrancar la app: el MSAL falso «vuelve del login» y la sesion se abre sola.
+    await import('./app.js');
+    await esperar(() => !$('pantallaSesion').classList.contains('oculto'), 'pantalla de sesion', 15000);
+    R.ok('entra con MSAL y oculta la entrada', $('pantallaEntrar').classList.contains('oculto'));
+    R.ok('titulo del esqueleto', $('titulo').textContent === 'ERP — esqueleto v0.1.0', $('titulo').textContent);
+    R.ok('pie con la version', $('pie').textContent === 'MINSA ERP v0.1.0', $('pie').textContent);
+    R.ok('rol leido de PROY_Roles', $('quien').textContent.endsWith(' · ' + ROL), $('quien').textContent);
+    R.ok('nombre de PROY_Roles, no el correo', $('quien').textContent.startsWith('Persona de Prueba'), $('quien').textContent);
+
+    // 3. El motor leyo las listas PROY_* del sitio Administracion.
+    R.ok('abre el sitio Administracion', DB.llamadas.some(c => c === 'GET /sites/minsaenergy.sharepoint.com:/sites/Administracion'), DB.llamadas[0]);
+    R.ok('pinta las 6 listas de config.js', document.querySelectorAll('#listas li').length === 6, String(document.querySelectorAll('#listas li').length));
+    R.ok('PROY_Roles: 3 renglones', fila('PROY_Roles') === '3 renglones', fila('PROY_Roles'));
+    R.ok('PROY_Proyectos: 1 renglón', fila('PROY_Proyectos') === '1 renglón', fila('PROY_Proyectos'));
+    R.ok('PROY_Tareas: 2 renglones', fila('PROY_Tareas') === '2 renglones', fila('PROY_Tareas'));
+    R.ok('PROY_Capital ausente se tolera', fila('PROY_Capital') === (sinCapital ? 'no existe' : '0 renglones'), fila('PROY_Capital'));
+    R.ok('el esqueleto no escribe nada', !DB.llamadas.some(c => /^(POST|PATCH|PUT|DELETE) /.test(c)), DB.llamadas.filter(c => !c.startsWith('GET ')).join(' | '));
+    R.ok('sin avisos de error', !document.querySelector('#avisos .mensaje.error'), document.querySelector('#avisos')?.textContent);
+} catch (e) {
+    R.ok('el escenario corrio sin excepcion', false, e && e.stack ? e.stack : String(e));
+}
+await R.cerrar();
+</script>
+</body>
+</html>

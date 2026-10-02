@@ -1,0 +1,2 @@
+# El vendor se coteja por hash (integrity + INTEGRIDAD.md): sus bytes no se normalizan nunca.
+vendor/*.js -text
