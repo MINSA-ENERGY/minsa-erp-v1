@@ -28,7 +28,7 @@
 </head>
 <body>
 
-<!-- ERP v0.5.0 (Archivos, Documentos del proyecto, Equipo; la ficha con descripcion, documentos y notas) · v0.3.0 (escrituras del kanban: dialogos al final) · v0.2.0 — fase 4, arranque: armazon (rail que colapsa a pestañas, tema claro/oscuro, ruta por hash), Inicio · Mis
+<!-- ERP v0.6.0 (Gastos: gastos.js y el dialogo dlgGasto) · v0.5.0 (Archivos, Documentos del proyecto, Equipo; la ficha con descripcion, documentos y notas) · v0.3.0 (escrituras del kanban: dialogos al final) · v0.2.0 — fase 4, arranque: armazon (rail que colapsa a pestañas, tema claro/oscuro, ruta por hash), Inicio · Mis
      pendientes, Proyectos y el tablero de un proyecto (solo lectura). Archivos, Gastos y Equipo: «en construcción». -->
 <section id="pantallaEntrar" class="entrar">
   <img class="logo solo-claro" src="./marca/lockup.svg" alt="MINSA ENERGY" width="724" height="256">
@@ -160,6 +160,40 @@
       <p class="nota-lectura">Para lo que no vive en la biblioteca de la unidad: un correo, un oficio en Legal o Finanzas, una página. Se guarda la liga, no el archivo.</p>
     </div>
     <div class="mn-dialog-foot"><button id="enCancelar" class="mn-btn" type="button">Cancelar</button><button id="enGuardar" class="mn-btn is-primary" type="submit">Guardar enlace</button></div>
+  </form>
+</dialog>
+
+<!-- v0.6.0: Gastos (gastos.js). El comprobante va a la biblioteca «Gastos» del sitio Administracion, carpeta AAAA-MM. «Tomar foto»
+     abre la camara del celular (capture); «Elegir archivo» deja escoger una foto o un PDF (capture solo impediria el PDF). -->
+<dialog id="dlgGasto" class="mn-dialog dlg-erp" aria-labelledby="gaCab">
+  <form id="formGasto" novalidate>
+    <div class="mn-dialog-head"><div><h2 id="gaCab">Registrar gasto</h2><div class="lbl">Tesorería solo reembolsa lo registrado aquí</div></div><button id="gaCerrar" class="mn-btn is-sm" type="button" aria-label="Cerrar">×</button></div>
+    <div class="mn-dialog-body">
+      <div class="dlg-avisos" role="status" aria-live="polite"></div>
+      <div id="gaParaCampo" class="mn-field oculto"><label for="gaPara">Para quién (a quién se le reembolsa)</label><select id="gaPara"></select></div>
+      <div class="dos monto-moneda">
+        <div class="mn-field"><label for="gaMonto">Monto (total con IVA)</label><input id="gaMonto" class="num" inputmode="decimal" autocomplete="off" placeholder="0.00"></div>
+        <div class="mn-field"><label for="gaMoneda">Moneda</label><select id="gaMoneda"><option value="MXN">MXN</option><option value="USD">USD</option></select></div>
+      </div>
+      <div class="mn-field"><label for="gaConcepto">Concepto</label><input id="gaConcepto" maxlength="255" autocomplete="off" placeholder="Ej. casetas a planta"></div>
+      <div class="dos">
+        <div class="mn-field"><label for="gaFecha">Fecha del ticket</label><input id="gaFecha"></div>
+        <div class="mn-field"><label for="gaCategoria">Categoría</label><select id="gaCategoria"></select></div>
+      </div>
+      <div class="dos">
+        <div class="mn-field"><label for="gaProyecto">Proyecto (opcional)</label><select id="gaProyecto"></select></div>
+        <div class="mn-field"><label for="gaEquipo">Equipo</label><select id="gaEquipo"></select></div>
+      </div>
+      <div class="mn-field"><label for="gaArchivo">Comprobante · opcional (foto del ticket o PDF)</label>
+        <div id="gaSinArchivo" class="ga-botones"><button id="gaTomar" class="mn-btn" type="button">Tomar foto</button><button id="gaElegir" class="mn-btn" type="button">Elegir archivo</button></div>
+        <div id="gaConArchivo" class="ga-archivo oculto"><span id="gaArchivoNombre"></span><button id="gaQuitar" class="mn-btn is-sm" type="button">Quitar</button></div>
+        <input id="gaFoto" class="oculto-visual" type="file" accept="image/*" capture="environment" tabindex="-1" aria-hidden="true">
+        <input id="gaArchivo" class="oculto-visual" type="file" accept="image/*,application/pdf" tabindex="-1">
+      </div>
+      <div class="mn-field"><label for="gaNotas" id="gaNotasEtq">Notas</label><textarea id="gaNotas" rows="2" maxlength="2000" placeholder="Fonda, efectivo, no dan comprobante…"></textarea></div>
+      <p id="gaProgreso" class="progreso" role="status" aria-live="polite"></p>
+    </div>
+    <div class="mn-dialog-foot"><button id="gaCancelar" class="mn-btn" type="button">Cancelar</button><button id="gaGuardar" class="mn-btn" type="submit" disabled>Falta el monto</button></div>
   </form>
 </dialog>
 

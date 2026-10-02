@@ -1,7 +1,10 @@
 # Corre la E2E de los 3 roles en Edge headless. Desde PowerShell (no desde Bash: msedge no esta en el PATH).
 #   powershell -NoProfile -ExecutionPolicy Bypass -File .\test\e2e.ps1
 # ASCII puro a proposito (PS 5.1 lee sin BOM como ANSI).
-param([string[]]$Roles = @('gerencia', 'colaborador', 'lectura'))
+# v0.6.0: dos corridas mas. 'tesoreria' = colaborador que ademas es tesoreria en ERP_Roles; 'sin-gastos' = colaborador SIN
+# ERP_Gastos/ERP_Roles/biblioteca (antes de que Carlos provisione): todo lo demas debe pasar igual.
+param([string[]]$Roles = @('gerencia', 'colaborador', 'lectura', 'tesoreria', 'sin-gastos'))
+$consulta = @{ 'tesoreria' = 'rol=colaborador&erp=tesoreria'; 'sin-gastos' = 'rol=colaborador&gastos=no' }
 $app = Split-Path -Parent $PSScriptRoot
 $edge = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 if (-not (Test-Path $edge)) { Write-Host "No esta Edge en $edge"; exit 1 }
@@ -21,7 +24,8 @@ $fallas = 0
 try {
     foreach ($rol in $Roles) {
         $out = Join-Path $env:TEMP "erp-e2e-$rol.html"
-        & $edge --headless=new --disable-gpu --virtual-time-budget=120000 --dump-dom "http://localhost:$puerto/?rol=$rol&refresco=0" 2>$null | Out-File -Encoding utf8 $out
+        $q = if ($consulta.ContainsKey($rol)) { $consulta[$rol] } else { "rol=$rol" }
+        & $edge --headless=new --disable-gpu --virtual-time-budget=120000 --dump-dom "http://localhost:$puerto/?$q&refresco=0" 2>$null | Out-File -Encoding utf8 $out
         Start-Sleep -Seconds 1
         $s = Get-Content $out -Raw -Encoding UTF8
         Write-Host "=== $rol"

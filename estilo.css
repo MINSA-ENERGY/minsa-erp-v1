@@ -371,3 +371,47 @@ button.kc:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; 
   .fila-eq .uso { grid-column: 1 / -1; }
   .tabs-proyecto { gap: 18px; }
 }
+
+/* ==== v0.6.0 — Gastos (gastos.js): Mis gastos, la cola de tesoreria, totales por mes y moneda, y el dialogo de alta ==== */
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.nota-gastos { margin: 0; font-size: 14px; max-width: 760px; }
+.resumen-gastos { margin: 0; font-size: 14px; }
+.gastos-lista { display: flex; flex-direction: column; }
+.gasto { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
+.gasto:last-child { border-bottom: 0; }
+.gasto-cuerpo { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gasto .titulo { color: var(--text-strong); font-weight: 500; overflow-wrap: anywhere; }
+.gasto-meta { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 13px; color: var(--text-muted); min-width: 0; }
+.gasto-meta > * { min-width: 0; overflow-wrap: anywhere; }
+.gasto-meta .quien { color: var(--text-body); font-weight: 500; }
+.gasto-nota { font-size: 13px; color: var(--text-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.gasto-alerta { font-size: 13px; color: var(--status-danger-fg); overflow-wrap: anywhere; }
+.gasto .monto { font-size: 15px; font-weight: 500; color: var(--text-strong); text-align: right; white-space: nowrap; }
+.gasto-estado { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; align-items: center; max-width: 340px; }
+.gastos-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.gastos-kpi .v { font: 500 20px var(--font-data); color: var(--text-strong); overflow-wrap: anywhere; }
+.gastos-kpi .f { font-size: 13px; color: var(--text-muted); }
+.tabla-totales { display: flex; flex-direction: column; }
+.fila-tot { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, .6fr) repeat(3, minmax(0, 1.2fr)) minmax(0, .5fr); gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+.fila-tot:last-child { border-bottom: 0; }
+.fila-tot.cab { padding-top: 0; }
+.fila-tot .lbl-movil { display: none; }
+.resueltos-gastos summary { cursor: pointer; font: 600 15px var(--font-ui); color: var(--text-strong); }
+.dlg-erp .dos.monto-moneda { grid-template-columns: minmax(0, 1fr) 7.5rem; }   /* la moneda cabe angosta tambien en celular */
+.ga-botones { display: flex; gap: 8px; }
+.ga-botones .mn-btn { flex: 1; }
+.ga-archivo { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1.5px dashed var(--line); border-radius: 10px; color: var(--text-strong); overflow-wrap: anywhere; }
+.ga-archivo span { min-width: 0; }
+@media (max-width: 720px) {
+  .gasto { grid-template-columns: auto minmax(0, 1fr); }
+  .gasto .monto { grid-column: 2; text-align: left; }
+  .gasto-estado { grid-column: 2; justify-content: flex-start; max-width: none; }
+  .gastos-kpis { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .vista .gastos-kpi { padding: 10px 16px; gap: 2px; }
+  .gastos-kpi .v { font-size: 17px; }
+  .fila-tot.cab { display: none; }
+  .fila-tot { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); row-gap: 4px; }
+  .fila-tot .lbl-movil { display: inline; color: var(--text-muted); font-size: 13px; }
+  .fila-tot [data-col="0"], .fila-tot [data-col="1"] { font-weight: 600; color: var(--text-strong); }
+  .fila-tot [data-col="0"] .lbl-movil, .fila-tot [data-col="1"] .lbl-movil { display: none; }
+}

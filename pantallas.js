@@ -1,6 +1,6 @@
-// ERP v0.5.0 — las pantallas de la fase 4: Inicio · Mis pendientes, Proyectos, el tablero de un Proyecto (v0.3.0: con
+// ERP v0.6.0 — las pantallas de la fase 4: Inicio · Mis pendientes, Proyectos, el tablero de un Proyecto (v0.3.0: con
 // escrituras — crear, mover arrastrando o desde la ficha, editar; viven en tarjetas.js), su pestaña Documentos y la pantalla
-// Archivos (v0.5.0: archivos.js), Equipo con «Escribió en la app» (v0.5.0) y la «en construcción» de Gastos (fase 5).
+// Archivos (v0.5.0: archivos.js), Equipo con «Escribió en la app» (v0.5.0) y, desde v0.6.0, Gastos en gastos.js (fase 5).
 // Forma: maqueta aprobada del 2026-10-01 (Main/Celular). Datos: las listas PROY_* de esquema.json, leidas como las lee
 // MINSA Proyectos (vistas.js/tablero.js). Todo con el()/textContent: los datos los escriben diez personas.
 
@@ -34,7 +34,7 @@ export function gruposPendientes(tareas, correo, hoy = new Date()) {
     return g.filter(x => x.items.length);
 }
 
-function cabecera(titulo, sub, etiqueta) {
+export function cabecera(titulo, sub, etiqueta) {
     const h = el('div', 'cabecera');
     const t = el('div');
     if (etiqueta) t.appendChild(el('div', 'lbl', etiqueta));
@@ -44,7 +44,7 @@ function cabecera(titulo, sub, etiqueta) {
     return h;
 }
 /** La hoja de calendario de una fecha (mes arriba, dia grande), o «sin fecha». */
-function hojaDia(iso, clase = 'dia') {
+export function hojaDia(iso, clase = 'dia') {
     const c = el('div', clase); const md = mesDia(iso);
     if (md) { c.appendChild(el('span', 'mes', md.mes.toUpperCase())); c.appendChild(el('b', '', md.dia)); }
     else { c.classList.add('sin'); c.appendChild(el('b', '', '—')); c.appendChild(el('span', 'mes', 'sin fecha')); }
@@ -275,9 +275,7 @@ export function pintarEquipo(v) {
 
 // ---------------------------------------------------------------- en construccion
 // Honestas: dicen que NO esta, por que, y donde se hace hoy. El boton dice que falta (no hace nada).
-const EN_CONSTRUCCION = {
-    gastos: { titulo: 'Gastos', etiqueta: 'Registro y reembolso', texto: 'Esta pantalla todavía no existe. Registrar un gasto (monto, concepto, proyecto y la foto opcional del ticket) llega en la fase 5 del plan, con su lista y la biblioteca «Gastos» en el sitio Administración.', falta: 'Falta: crear la lista y la biblioteca «Gastos»' }
-};
+const EN_CONSTRUCCION = {};   // v0.6.0: Gastos dejo de serlo (gastos.js); queda el generico para un destino futuro
 export function pintarEnConstruccion(v, pestana) {
     const c = EN_CONSTRUCCION[pestana] || { titulo: pestana, etiqueta: '', texto: 'Esta pantalla todavía no existe.', falta: 'Falta: construirla' };
     v.appendChild(cabecera(c.titulo, '', c.etiqueta));

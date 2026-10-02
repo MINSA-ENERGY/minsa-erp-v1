@@ -11,6 +11,9 @@
      v0.5.0: Archivos (#archivos y la pestaña Documentos del proyecto: «qué documentos faltan», subir al buzón, ligar,
      pegar enlace, quitar, el chip «ya lo acomodó la skill»), Equipo («Escribió en la app») y la ficha con descripción,
      documentos y notas, para los 3 roles (lectura: lo ve todo, no escribe nada ni forzando).
+     v0.6.0: Gastos (seccion 12) — Mis gastos, registrar con y sin comprobante (drive falso de «Gastos» con 409 real), la subida
+     que falla y «Agregar comprobante»; ?erp=tesoreria = la cola, reembolsar, rechazar, doble pago, 412 y captura por otro;
+     ?gastos=no = la app entera sin ERP_Gastos/ERP_Roles/biblioteca (#gastos lo dice; lo demas pasa igual).
      Los ~2,800 renglones de escenarios de Proyectos prueban sus VISTAS (tablero, docs, chat, capital...), que no se
      trajeron; vuelven por pantalla en la fase 4. Sin CSP a proposito (herramienta de desarrollo, _config.yml la
      excluye de Pages). Se corre desde app/ con `npm run test:e2e` (PowerShell + Edge headless, 3 roles). -->
@@ -57,7 +60,7 @@
     const DESCARGA = 'https://minsaenergy.sharepoint.com/_descarga-falsa/';
     // Dos sitios: el de las listas (Administracion) y la biblioteca de CALYTEK; el resto contesta 403.
     const SITIOS = { '/sites/Administracion': 'sitio-falso', '/sites/Ambiental-CALYTEK': 'sitio-calytek' };
-    const DB = { listas: {}, carpetas: [], archivos: [], siguienteId: 1, esquema: null, fallas: [], llamadas: [], filtros: [], ifMatch: 0, textoLargo: [], itemsLeidos: [], descargas: [], sinAsignadoPor: false, sinSalud: false };   // sinSalud (R-05): PROY_Proyectos antes de provisionar Salud/SaludNota/SaludPor/SaludEl   // sinAsignadoPor: la lista viva ANTES de provisionar la columna (C-02)
+    const DB = { listas: {}, carpetas: [], archivos: [], gastosDrive: { carpetas: [], archivos: [] }, siguienteId: 1, esquema: null, fallas: [], llamadas: [], filtros: [], ifMatch: 0, textoLargo: [], itemsLeidos: [], descargas: [], sinAsignadoPor: false, sinSalud: false };   // sinSalud (R-05): PROY_Proyectos antes de provisionar Salud/SaludNota/SaludPor/SaludEl   // sinAsignadoPor: la lista viva ANTES de provisionar la columna (C-02)
     window.__DB = DB;
 
     function lista(id) { for (const l of Object.values(DB.listas)) if (l.id === id) return l; return null; }
@@ -158,6 +161,28 @@
             l.items.splice(i, 1);
             return new Response(null, { status: 204 });
         }
+        // v0.6.0: la biblioteca «Gastos» del sitio Administracion, por su drive (/drives/drive-gastos/…), como la usa gastos.js.
+        if ((m = /^\/sites\/sitio-falso\/lists\/([^/]+)\/drive\?\$select=id$/.exec(ruta)) && metodo === 'GET') {
+            const l = lista(m[1]); return l && l.drive ? json(200, { id: l.drive }) : error(404, 'esa lista no es una biblioteca');
+        }
+        if (ruta === '/drives/drive-gastos/root/children' && metodo === 'POST') {
+            const c = JSON.parse(opts.body);
+            if (DB.gastosDrive.carpetas.includes(c.name)) return error(409, 'nameAlreadyExists');
+            DB.gastosDrive.carpetas.push(c.name); return json(201, { id: 'carpeta-gastos-' + c.name, name: c.name });
+        }
+        if ((m = /^\/drives\/drive-gastos\/root:\/(.+):\/content\?@microsoft\.graph\.conflictBehavior=fail$/.exec(ruta)) && metodo === 'PUT') {
+            const r2 = decodeURIComponent(m[1]); const carpeta = r2.slice(0, r2.lastIndexOf('/'));
+            if (!DB.gastosDrive.carpetas.includes(carpeta)) return error(404, 'la carpeta no existe: ' + carpeta);
+            if (DB.gastosDrive.archivos.some(a => a.ruta === r2)) return error(409, 'nameAlreadyExists');
+            const a = { id: 'gasto-arch-' + DB.siguienteId++, ruta: r2, nombre: r2.slice(r2.lastIndexOf('/') + 1), bytes: opts.body ? (opts.body.byteLength || 0) : 0, tipo: opts.headers && opts.headers['Content-Type'] };
+            a.webUrl = 'https://minsaenergy.sharepoint.com/sites/Administracion/Gastos/' + encodeURI(r2);
+            DB.gastosDrive.archivos.push(a);
+            return json(201, { id: a.id, name: a.nombre, webUrl: a.webUrl });
+        }
+        if ((m = /^\/drives\/drive-gastos\/items\/([^/?]+)\?\$select=id,name,webUrl$/.exec(ruta)) && metodo === 'GET') {
+            const a = DB.gastosDrive.archivos.find(x => x.id === decodeURIComponent(m[1]));
+            return a ? json(200, { id: a.id, name: a.nombre, webUrl: a.webUrl }) : error(404, 'itemNotFound');
+        }
         // Biblioteca de CALYTEK: busqueda, existencia, carpetas, piezas.
         if ((m = /^\/sites\/sitio-calytek\/drive\/root\/search\(q='([^']*)'\)/.exec(ruta)) && metodo === 'GET') {
             const q = decodeURIComponent(m[1]).toLowerCase();
@@ -214,6 +239,7 @@
     window.__sembrar = function (esquema, rol) {
         DB.esquema = esquema;
         for (const l of esquema.listas) DB.listas[l.clave] = { id: 'lista-' + l.clave, nombre: l.nombre, items: [] };
+        DB.listas.bibGastos = { id: 'lista-bibgastos', nombre: 'Gastos', items: [], drive: 'drive-gastos' };   // v0.6.0: la biblioteca (una lista con drive)
         const roles = DB.listas.roles.items;
         roles.push({ id: DB.siguienteId++, fields: { Title: window.__CUENTA.username, Nombre: 'Persona de Prueba', Rol: rol, Activo: true } });
         roles.push({ id: DB.siguienteId++, fields: { Title: 'colega@example.invalid', Nombre: 'Colega Demo', Rol: 'colaborador', Activo: true } });
@@ -310,13 +336,38 @@ try {
     AC('jefa@example.invalid', dia(-200), 'crear-proyecto', 'creó el proyecto «LAU CALYTEK»', { ProyectoId: lau });   // fuera de la ventana de 90 dias
     // Con rol lectura se prueba ademas que PROY_Capital ausente no estorba (v0.2.0 ya no la lee).
     if (ROL === 'lectura') delete DB.listas.capital;
+    // v0.6.0: Gastos. ?erp=tesoreria hace tesoreria (ERP_Roles) a la persona de prueba; ?gastos=no corre TODO sin ERP_Gastos, ERP_Roles ni
+    // la biblioteca (Carlos aun no provisiona): el resto de la app debe pasar igual y #gastos decirlo.
+    const QS = new URLSearchParams(location.search);
+    const ERP = QS.get('erp') || '';
+    const SIN_GASTOS = QS.get('gastos') === 'no';
+    const mesDe = iso => iso.slice(0, 7);
+    const XSS_GASTO = '<img src=x onerror="window.__xss3=1">Comida en campo';
+    const GA = fields => { const id = DB.siguienteId++; DB.listas.gastos.items.push({ id, fields }); return id; };
+    let gMio, gMioReemb, gMioRech, gColega, gDoble, gColegaReemb;
+    if (SIN_GASTOS) { delete DB.listas.gastos; delete DB.listas.rolesErp; delete DB.listas.bibGastos; }
+    else {
+        const RE = fields => DB.listas.rolesErp.items.push({ id: DB.siguienteId++, fields });
+        RE({ Title: 'tesorera@example.invalid', Nombre: 'Tesorera Demo', Rol: 'tesoreria', Activo: true });
+        RE({ Title: 'jefa@example.invalid', Nombre: 'Jefa Demo', Rol: 'contabilidad', Activo: true });
+        RE({ Title: yo, Nombre: 'Persona de Prueba', Rol: 'tesoreria', Activo: ERP === 'tesoreria' });   // inactivo = no es tesoreria
+        const rutaSembrada = `${mesDe(dia(-2))}/${dia(-2).slice(0, 10)}_GASTO-0_Ticket_gasolina.jpg`;
+        DB.gastosDrive.carpetas.push(mesDe(dia(-2)));
+        DB.gastosDrive.archivos.push({ id: 'gasto-arch-sembrado', ruta: rutaSembrada, nombre: rutaSembrada.split('/')[1], webUrl: 'https://minsaenergy.sharepoint.com/sites/Administracion/Gastos/' + rutaSembrada });
+        gMio = GA({ Title: 'Gasolina visita a planta', Fecha: dia(-2), Monto: 850, Moneda: 'MXN', Categoria: 'combustible', Equipo: 'CALYTEK', ProyectoId: lau, Solicitante: yo, CapturadoPor: yo, Estado: 'registrado', CfdiEstado: 'sin-cfdi', ComprobanteItemId: 'gasto-arch-sembrado', ComprobanteRuta: rutaSembrada });
+        gMioReemb = GA({ Title: 'Hotel en Reynosa', Fecha: dia(-40), Monto: 120, Moneda: 'USD', Categoria: 'hospedaje', Equipo: 'PITEPEC', Solicitante: yo, CapturadoPor: yo, Estado: 'reembolsado', ReembolsadoPor: 'tesorera@example.invalid', ReembolsadoEl: dia(-35), CfdiEstado: 'confirmado', Notas: 'Factura en el correo' });
+        gMioRech = GA({ Title: 'Comida duplicada', Fecha: dia(-5), Monto: 300, Moneda: 'MXN', Equipo: 'CALYTEK', Solicitante: yo, CapturadoPor: yo, Estado: 'rechazado', RechazadoPor: 'tesorera@example.invalid', RechazadoEl: dia(-4), MotivoRechazo: 'Duplicado del 26-sep', Notas: 'Fonda' });
+        gColega = GA({ Title: XSS_GASTO, Fecha: dia(-6), Monto: 460, Moneda: 'MXN', Equipo: 'PITEPEC', ProyectoId: pit, Solicitante: 'colega@example.invalid', CapturadoPor: 'colega@example.invalid', Estado: 'registrado', Notas: 'Fonda, no dan ticket', CfdiEstado: 'propuesto' });
+        gDoble = GA({ Title: 'Casetas Monterrey–planta', Fecha: dia(-8), Monto: 1558, Moneda: 'MXN', Equipo: 'CALYTEK', Solicitante: 'colega@example.invalid', CapturadoPor: 'tesorera@example.invalid', Estado: 'registrado', ReembolsadoPor: 'tesorera@example.invalid', ReembolsadoEl: dia(-7), ComprobanteItemId: 'gasto-arch-sembrado', ComprobanteRuta: rutaSembrada });
+        gColegaReemb = GA({ Title: 'Copias del expediente', Fecha: dia(-1), Monto: 312, Moneda: 'MXN', Equipo: 'CALYTEK', Solicitante: 'colega@example.invalid', CapturadoPor: 'colega@example.invalid', Estado: 'reembolsado', ReembolsadoPor: 'tesorera@example.invalid', ReembolsadoEl: dia(0) });
+    }
 
     // 2. Arrancar la app: el MSAL falso «vuelve del login» y la sesion se abre sola.
     await import('./app.js');
     await esperar(() => !$('pantallaSesion').classList.contains('oculto'), 'pantalla de sesion', 15000);
     await esperar(() => pantalla(), 'primera pantalla');
     R.ok('entra con MSAL y oculta la entrada', $('pantallaEntrar').classList.contains('oculto'));
-    R.ok('pie con la version', $('pie').textContent === 'MINSA ERP v0.5.0', $('pie').textContent);
+    R.ok('pie con la version', $('pie').textContent === 'MINSA ERP v0.6.0', $('pie').textContent);
     R.ok('celular: «···» lleva Tema y Salir', !!document.querySelector('#masMovil #temaMovil') && !!document.querySelector('#masMovil #btnSalirMovil'));
     R.ok('nombre de PROY_Roles, no el correo', $('quien').textContent === 'Persona de Prueba', $('quien').textContent);
     R.ok('rol leido de PROY_Roles', $('rolQuien').textContent === ROL, $('rolQuien').textContent);
@@ -373,9 +424,11 @@ try {
     await irA('#p/nadie', 'proyecto');
     R.ok('una clave que no existe lo dice', /No encontré ese proyecto/.test(vista().textContent));
 
-    // 8. La «en construcción» que queda (Gastos, fase 5) es honesta
+    // 8. v0.6.0: Gastos ya no es «en construcción»; ERP_Gastos se lee al ENTRAR a #gastos, no al abrir la app (el detalle, en 12)
+    R.ok('Gastos: abrir la app no lee ERP_Gastos ni ERP_Roles', !DB.llamadas.some(c => /lista-(gastos|rolesErp)\//.test(c)));
     await irA('#gastos', 'gastos');
-    R.ok('Gastos: en construcción, con lo que falta', vista().querySelector('h1').textContent === 'Gastos' && /en construcción/.test($('enConstruccion').textContent) && !!$('enConstruccion').querySelector('.btn.incompleto[disabled]'));
+    await esperar(() => $('misGastos') || $('gastosNoHabilitado'), 'Gastos leído');
+    R.ok('Gastos: ya no es «en construcción»', vista().querySelector('h1').textContent === 'Gastos' && !$('enConstruccion'));
     const ESCRIBE = ROL !== 'lectura';
     const filasDoc = sel => [...document.querySelectorAll(sel + ' .doc')];
     const ponerTexto = (id, v) => { const i = $(id); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); };
@@ -730,6 +783,184 @@ try {
         const quito = await AR.quitarLiga({ ...ligaDB('Oficio ASEA (correo del gestor)').fields, id: lgEnlace });
         R.ok('lectura: forzar Quitar → se niega sin preguntar', quito === false && !$('dlg').open && !!ligaDB('Oficio ASEA (correo del gestor)'));
         R.ok('lectura: CERO escrituras también con Archivos', escrituras().length === 0, escrituras().join(' | '));
+    }
+    for (const d of document.querySelectorAll('dialog[open]')) d.close();
+
+    // 12. v0.6.0: GASTOS — empleado (registrar con y sin comprobante, Mis gastos), tesoreria (cola, reembolsar, rechazar, totales),
+    // lectura (lo ve, no escribe ni forzando) y la lista que no existe (?gastos=no).
+    const GS = await import('./gastos.js');
+    const nEsc0 = escrituras().length;
+    const escGastos = () => escrituras().slice(nEsc0);
+    const gastoDB = id => DB.listas.gastos.items.find(x => x.id === id);
+    const ventanas = [];
+    window.open = () => { const w = { location: {}, closed: false, close() { this.closed = true; } }; ventanas.push(w); return w; };
+    const archivoFalso = (nombre, tipo) => new File(['bytes de prueba del comprobante'], nombre, { type: tipo });
+    const ponerArchivoEn = (id, f) => { const dt = new DataTransfer(); dt.items.add(f); $(id).files = dt.files; $(id).dispatchEvent(new Event('change', { bubbles: true })); };
+    if (SIN_GASTOS) {
+        await irA('#gastos', 'gastos'); await esperar(() => $('gastosNoHabilitado'), 'Gastos no habilitado');
+        R.ok('sin ERP_Gastos: la pantalla lo dice claro', /Gastos aún no está habilitado — falta crear la lista/.test($('gastosNoHabilitado').textContent) && /docs\/gastos-instrucciones-carlos\.md/.test($('gastosNoHabilitado').textContent));
+        R.ok('sin ERP_Gastos: «Registrar gasto» dice qué falta y no hace nada', $('btnNuevoGasto').disabled && $('btnNuevoGasto').textContent === 'Registrar gasto: falta crear la lista');
+        R.ok('sin ERP_Gastos: no pide ERP_Roles ni la biblioteca', !DB.llamadas.some(c => /lista-rolesErp|\/drives\//.test(c)));
+        GS.abrirNuevoGasto(); await dormir(30);
+        R.ok('sin ERP_Gastos: forzar «Registrar» no abre y lo dice', !$('dlgGasto').open && !!avisoCon('falta crear la lista'));
+        document.querySelector('#avisos .cerrar')?.click();   // el aviso de error de arriba (forzado a proposito) se queda hasta cerrarlo
+        $('btnRevisarGastos').click(); await esperar(() => $('gastosNoHabilitado'), 'revisado otra vez');
+        R.ok('sin ERP_Gastos: «Volver a revisar» relee y sigue diciéndolo, sin error', !!$('gastosNoHabilitado') && !document.querySelector('#avisos .mensaje.error'));
+        R.ok('sin ERP_Gastos: cero escrituras de gastos', escGastos().length === 0, escGastos().join(' | '));
+    } else {
+        await irA('#gastos', 'gastos'); await esperar(() => $('misGastos'), 'Mis gastos');
+        const filaG = (id, sel = '#vista') => document.querySelector(`${sel} [data-gasto="${id}"]`);
+        const idsEn = sel => [...document.querySelectorAll(`${sel} .gasto`)].map(f => Number(f.dataset.gasto));
+        R.ok('Gastos: lee ERP_Gastos y ERP_Roles al entrar', DB.llamadas.some(c => c.includes('/lists/lista-gastos/items')) && DB.llamadas.some(c => c.includes('/lists/lista-rolesErp/items')));
+        R.ok('Mis gastos: solo los míos, el más reciente primero', idsEn('#misGastos').join(',') === [gMio, gMioRech, gMioReemb].join(','), idsEn('#misGastos').join(','));
+        R.ok('Mis gastos: estado con su chip (registrado · rechazado · reembolsado)', filaG(gMio).dataset.estado === 'registrado' && /Registrado/.test(filaG(gMio).querySelector('.gasto-estado').textContent) && filaG(gMioRech).querySelector('.mn-chip.is-danger')?.textContent === 'Rechazado' && filaG(gMioReemb).querySelector('.mn-chip.is-ok')?.textContent === 'Reembolsado');
+        R.ok('Mis gastos: el monto con su moneda, en la monoespaciada', filaG(gMioReemb).querySelector('.monto').textContent === '$120.00 USD' && /IBM Plex Mono/.test(getComputedStyle(filaG(gMioReemb).querySelector('.monto')).fontFamily), getComputedStyle(filaG(gMioReemb).querySelector('.monto')).fontFamily);
+        R.ok('Mis gastos: el rechazado dice quién y por qué', /Rechazado por Tesorera Demo/.test(filaG(gMioRech).textContent) && /Duplicado del 26-sep/.test(filaG(gMioRech).textContent));
+        R.ok('Mis gastos: CFDI solo si la columna trae valor', filaG(gMio).querySelector('.cfdi')?.textContent === 'Sin CFDI' && filaG(gMioReemb).querySelector('.cfdi')?.textContent === 'CFDI ✓' && !filaG(gMioRech).querySelector('.cfdi'));
+        R.ok('Mis gastos: «por reembolsarte» suma lo registrado', /Por reembolsarte: \$850\.00 MXN \(1 gasto\)/.test($('misGastosResumen').textContent), $('misGastosResumen').textContent);
+        R.ok('Mis gastos: proyecto y equipo por nombre', /LAU CALYTEK · CALYTEK/.test(filaG(gMio).querySelector('.gasto-meta').textContent));
+        R.ok('Mis gastos: lo de la colega no sale', !filaG(gColega) && !filaG(gDoble));
+        R.ok('Mis gastos: sin avatares ni iniciales', !vista().querySelector('.av'));
+        filaG(gMio).querySelector('[data-ver-comprobante]').click();
+        await esperar(() => ventanas.length && ventanas[0].location.href, 'liga del comprobante');
+        R.ok('Ver comprobante: abre la liga de SharePoint de la biblioteca Gastos', /^https:\/\/minsaenergy\.sharepoint\.com\/sites\/Administracion\/Gastos\//.test(ventanas[0].location.href) && ventanas[0].opener === null, ventanas[0].location.href);
+
+        if (ERP === 'tesoreria') {
+            R.ok('tesorería: pestañas Mis gastos · Tesorería con «por reembolsar 3»', !!$('tabsGastos') && document.querySelector('#tabsGastos [data-tab="tesoreria"] .mn-chip')?.textContent === 'por reembolsar 3');
+            document.querySelector('#tabsGastos [data-tab="tesoreria"]').click();
+            await esperar(() => $('colaTesoreria'), 'cola de tesorería');
+            R.ok('tesorería: #gastos/tesoreria', location.hash === '#gastos/tesoreria' && vista().dataset.tab === 'tesoreria', location.hash);
+            R.ok('tesorería: la cola = lo registrado de todos, el más viejo primero', idsEn('#colaTesoreria').join(',') === [gDoble, gColega, gMio].join(','), idsEn('#colaTesoreria').join(','));
+            R.ok('tesorería: un concepto con HTML se pinta como texto', filaG(gColega, '#colaTesoreria').querySelector('.titulo').textContent === XSS_GASTO && !vista().querySelector('img') && !window.__xss3);
+            R.ok('tesorería: nombra al solicitante y a quien capturó por él', /Colega Demo/.test(filaG(gDoble, '#colaTesoreria').textContent) && /capturó Tesorera Demo/.test(filaG(gDoble, '#colaTesoreria').textContent));
+            R.ok('tesorería: señala el ya reembolsado antes (doble pago)', !!filaG(gDoble, '#colaTesoreria').querySelector('.ya-reembolsado') && !filaG(gColega, '#colaTesoreria').querySelector('.ya-reembolsado'));
+            const kpi = k => document.querySelector(`#gastosKpis [data-kpi="${k}"]`);
+            R.ok('tesorería: por reembolsar $2,868.00 MXN en 3 gastos', kpi('por-reembolsar').querySelector('.v').textContent === '$2,868.00 MXN' && /3 gastos/.test(kpi('por-reembolsar').textContent), kpi('por-reembolsar').textContent);
+            R.ok('tesorería: reembolsado este mes (por la fecha del reembolso)', kpi('reembolsado-mes').querySelector('.v').textContent === '$312.00 MXN', kpi('reembolsado-mes').querySelector('.v').textContent);
+            R.ok('tesorería: sin comprobante en la cola = 1', kpi('sin-comprobante').querySelector('.v').textContent === '1');
+            const tot = (mes, mo) => document.querySelector(`#totalesGastos .fila-tot[data-mes="${mes}"][data-moneda="${mo}"]`);
+            const celda = (f, i) => f.querySelector(`[data-col="${i}"]`).lastChild.textContent;
+            const esperadoMxn = [[gMio, 850, 'registrado', dia(-2)], [gColega, 460, 'registrado', dia(-6)], [gDoble, 1558, 'registrado', dia(-8)]].filter(x => mesDe(x[3]) === mesDe(dia(-2))).reduce((a, x) => a + x[1], 0);
+            R.ok('tesorería: totales por mes y moneda (pesos y dólares aparte)', !!tot(mesDe(dia(-40)), 'USD') && celda(tot(mesDe(dia(-40)), 'USD'), 3) === '$120.00 USD' && celda(tot(mesDe(dia(-2)), 'MXN'), 2) === '$' + esperadoMxn.toLocaleString('en-US', { minimumFractionDigits: 2 }) + ' MXN', `${celda(tot(mesDe(dia(-2)), 'MXN'), 2)} vs ${esperadoMxn}`);
+            R.ok('tesorería: resueltos plegados (3)', $('resueltosGastos') && !$('resueltosGastos').open && /· 3$/.test($('resueltosGastos').querySelector('summary').textContent));
+            // Marcar reembolsado: PATCH con If-Match, solo el sello
+            const nIf = DB.ifMatch;
+            filaG(gColega, '#colaTesoreria').querySelector('[data-reembolsar]').click();
+            await esperar(() => gastoDB(gColega).fields.Estado === 'reembolsado', 'reembolsado');
+            R.ok('reembolsar: PATCH con If-Match de Estado + ReembolsadoPor/El (nada más)', Object.keys(DB.ultimoPatch.gastos).sort().join(',') === 'Estado,ReembolsadoEl,ReembolsadoPor' && gastoDB(gColega).fields.ReembolsadoPor === yo && /^\d{4}-\d{2}-\d{2}T/.test(gastoDB(gColega).fields.ReembolsadoEl) && DB.ifMatch > nIf, JSON.stringify(DB.ultimoPatch.gastos));
+            await esperar(() => !filaG(gColega, '#colaTesoreria'), 'sale de la cola');
+            R.ok('reembolsar: sale de la cola y lo dice', !!avisoCon('Reembolsado:'));
+            // El ya reembolsado antes: pregunta; cancelar no escribe
+            const nPatch = escGastos().filter(c => c.startsWith('PATCH')).length;
+            filaG(gDoble, '#colaTesoreria').querySelector('[data-reembolsar]').click(); await esperar(() => $('dlg').open, 'confirmación del doble pago');
+            R.ok('doble pago: pregunta antes, con la fecha del primer reembolso', /ya se reembolsó una vez/.test($('dlgTitulo').textContent) && /no se pague dos veces/.test($('dlgTexto').textContent));
+            $('dlgCancelar').click(); await dormir(60);
+            R.ok('doble pago: cancelar no escribe', escGastos().filter(c => c.startsWith('PATCH')).length === nPatch && gastoDB(gDoble).fields.Estado === 'registrado');
+            // Rechazar: motivo obligatorio; no toca el sello del reembolso
+            filaG(gDoble, '#colaTesoreria').querySelector('[data-rechazar]').click(); await esperar(() => $('dlg').open, 'confirmación de rechazo');
+            $('dlgOk').click(); await dormir(40);
+            R.ok('rechazar: sin motivo no se puede', $('dlg').open && !$('dlgError').classList.contains('oculto'));
+            $('dlgMotivo').value = 'Ya se pagó en la caja chica'; $('dlgOk').click();
+            await esperar(() => gastoDB(gDoble).fields.Estado === 'rechazado', 'rechazado');
+            R.ok('rechazar: Estado + RechazadoPor/El + MotivoRechazo; el sello del reembolso se queda', Object.keys(DB.ultimoPatch.gastos).sort().join(',') === 'Estado,MotivoRechazo,RechazadoEl,RechazadoPor' && gastoDB(gDoble).fields.MotivoRechazo === 'Ya se pagó en la caja chica' && gastoDB(gDoble).fields.ReembolsadoEl === dia(-7), JSON.stringify(DB.ultimoPatch.gastos));
+            // 412: alguien cambio el renglon en medio -> no se pisa, se relee
+            gastoDB(gMio).etag = (gastoDB(gMio).etag || 1) + 5;
+            await esperar(() => filaG(gMio, '#colaTesoreria'), 'gMio en la cola');
+            filaG(gMio, '#colaTesoreria').querySelector('[data-reembolsar]').click();
+            await esperar(() => avisoCon('Alguien cambió ese gasto'), 'aviso del 412');
+            R.ok('412: no pisa, avisa y relee', gastoDB(gMio).fields.Estado === 'registrado' && DB.llamadas.filter(c => c.includes('/lists/lista-gastos/items?')).length >= 2);
+            await esperar(() => filaG(gMio, '#colaTesoreria'), 'releído');
+            filaG(gMio, '#colaTesoreria').querySelector('[data-reembolsar]').click();
+            await esperar(() => gastoDB(gMio).fields.Estado === 'reembolsado', 'reembolsado tras releer');
+            R.ok('412: tras releer, el segundo intento escribe', gastoDB(gMio).fields.ReembolsadoPor === yo);
+            document.querySelector('#tabsGastos [data-tab="mios"]').click(); await esperar(() => $('misGastos'), 'de vuelta a Mis gastos');
+        } else {
+            R.ok('no tesorería: sin pestaña Tesorería ni sus botones', !$('tabsGastos') && !document.querySelector('[data-reembolsar], [data-rechazar]'));
+            await irA('#gastos/tesoreria', 'gastos'); await esperar(() => $('misGastos'), 'Mis gastos por #gastos/tesoreria');
+            R.ok('no tesorería: #gastos/tesoreria enseña Mis gastos, sin la cola', !$('colaTesoreria') && !document.querySelector('[data-reembolsar]'));
+            const r1 = await GS.marcarReembolsado(gColega); const r2 = await GS.rechazarGasto(gColega);
+            R.ok('no tesorería: forzar reembolsar/rechazar se niega y lo dice', r1 === false && r2 === false && !$('dlg').open && !!avisoCon('Solo tesorería') && gastoDB(gColega).fields.Estado === 'registrado' && !escGastos().some(c => c.startsWith('PATCH')));
+            await irA('#gastos', 'gastos'); await esperar(() => $('misGastos'), 'Mis gastos');
+        }
+
+        if (ROL !== 'lectura') {
+            // Alta con foto: el boton dice que falta; el comprobante va a Gastos/AAAA-MM con la convencion y sin sobrescribir
+            $('btnNuevoGasto').click(); await esperar(() => $('dlgGasto').open, 'diálogo Registrar gasto');
+            const hoyDdmm = ddmm(hoyMx);
+            R.ok('alta: la fecha nace hoy (dd/mm/aaaa) y el botón dice todo lo que falta', $('gaFecha').value === hoyDdmm && $('gaGuardar').disabled && $('gaGuardar').textContent === 'Falta el monto, el concepto, el equipo y foto o nota', `${$('gaFecha').value} · ${$('gaGuardar').textContent}`);
+            R.ok('alta: «Para quién» solo para tesorería', $('gaParaCampo').classList.contains('oculto') === (ERP !== 'tesoreria'));
+            R.ok('alta: «Tomar foto» abre la cámara (capture) y «Elegir archivo» acepta foto o PDF', $('gaFoto').getAttribute('capture') === 'environment' && $('gaFoto').accept === 'image/*' && $('gaArchivo').accept === 'image/*,application/pdf');
+            poner('gaMonto', '1,250.50'); poner('gaConcepto', 'Casetas a planta'); poner('gaProyecto', String(lau));
+            R.ok('alta: elegir el proyecto pone su equipo', $('gaEquipo').value === 'CALYTEK');
+            R.ok('alta: sin comprobante pide la nota (y lo dice en la etiqueta)', $('gaGuardar').textContent === 'Falta foto o nota' && /obligatoria/.test($('gaNotasEtq').textContent));
+            poner('gaFecha', ddmm(dia(1)));
+            R.ok('alta: una fecha futura no pasa', $('gaGuardar').textContent.startsWith('Falta una fecha que no sea futura'), $('gaGuardar').textContent);
+            poner('gaFecha', hoyDdmm);
+            ponerArchivoEn('gaFoto', archivoFalso('IMG_2041.JPG', 'image/jpeg'));
+            R.ok('alta: con foto, Notas pasa a opcional y el botón dice «Registrar gasto»', !$('gaGuardar').disabled && $('gaGuardar').textContent === 'Registrar gasto' && $('gaNotasEtq').textContent === 'Notas (opcional)' && /IMG_2041\.JPG/.test($('gaArchivoNombre').textContent));
+            // Choque de nombre sembrado: el archivo con el ID que va a tocar ya existe -> _2, nunca se sobrescribe
+            const idNuevo = DB.siguienteId; const carpetaHoy = mesDe(hoyMx);
+            const yaEsta = `${carpetaHoy}/${hoyMx}_GASTO-${idNuevo}_Ticket_casetas-a-planta.jpg`;
+            if (!DB.gastosDrive.carpetas.includes(carpetaHoy)) DB.gastosDrive.carpetas.push(carpetaHoy);
+            DB.gastosDrive.archivos.push({ id: 'gasto-arch-choque', ruta: yaEsta, nombre: yaEsta.split('/')[1], webUrl: 'https://minsaenergy.sharepoint.com/x' });
+            $('formGasto').requestSubmit();
+            await esperar(() => !$('dlgGasto').open && gastoDB(idNuevo) && gastoDB(idNuevo).fields.ComprobanteItemId, 'gasto con comprobante');
+            const nuevo = gastoDB(idNuevo).fields;
+            R.ok('alta: POST a ERP_Gastos con los campos del esquema', enEsquema(nuevo, 'ERP_Gastos').length === 0 && nuevo.Title === 'Casetas a planta' && nuevo.Monto === 1250.5 && nuevo.Moneda === 'MXN' && nuevo.Equipo === 'CALYTEK' && nuevo.ProyectoId === lau && nuevo.Estado === 'registrado' && nuevo.Fecha === hoyMx + 'T18:00:00.000Z' && nuevo.Solicitante === yo && nuevo.CapturadoPor === yo && nuevo.CfdiEstado === 'sin-cfdi', JSON.stringify(nuevo));
+            R.ok('alta: el comprobante NO sobrescribe — sale con _2 en Gastos/AAAA-MM', nuevo.ComprobanteRuta === `${carpetaHoy}/${hoyMx}_GASTO-${idNuevo}_Ticket_casetas-a-planta_2.jpg` && DB.gastosDrive.archivos.find(a => a.id === 'gasto-arch-choque').ruta === yaEsta && DB.gastosDrive.archivos.some(a => a.id === nuevo.ComprobanteItemId && a.ruta === nuevo.ComprobanteRuta && a.tipo === 'image/jpeg'), nuevo.ComprobanteRuta);
+            R.ok('alta: la carpeta del mes ya existía (409) y no estorbó', escGastos().some(c => c === 'POST /drives/drive-gastos/root/children'));
+            R.ok('alta: el PATCH del comprobante lleva solo sus 2 campos', Object.keys(DB.ultimoPatch.gastos).sort().join(',') === 'ComprobanteItemId,ComprobanteRuta');
+            await esperar(() => filaG(idNuevo, '#misGastos'), 'el gasto nuevo en Mis gastos');
+            R.ok('alta: aparece primero en Mis gastos con su comprobante', idsEn('#misGastos')[0] === idNuevo && !!filaG(idNuevo, '#misGastos').querySelector('[data-ver-comprobante]') && !!avisoCon('Gasto registrado'));
+            // Sin foto, con nota, en un mes viejo: ninguna llamada a la biblioteca
+            const nDrive = escGastos().filter(c => c.includes('/drives/')).length;
+            $('btnNuevoGasto').click(); await esperar(() => $('dlgGasto').open, 'alta sin foto');
+            R.ok('alta: al reabrir el diálogo nace limpio', $('gaMonto').value === '' && $('gaConcepto').value === '' && $('gaConArchivo').classList.contains('oculto'));
+            poner('gaMonto', '95'); poner('gaConcepto', 'Taxi a la notaría'); poner('gaEquipo', 'Administracion'); poner('gaFecha', ddmm(dia(-60))); poner('gaNotas', 'No dan ticket'); poner('gaMoneda', 'USD');
+            const idSin = DB.siguienteId;
+            $('formGasto').requestSubmit();
+            await esperar(() => !$('dlgGasto').open && gastoDB(idSin), 'gasto sin foto');
+            const sin = gastoDB(idSin).fields;
+            R.ok('alta sin foto: Notas obligatoria guardada, sin comprobante ni biblioteca', sin.Notas === 'No dan ticket' && !sin.ComprobanteItemId && !('ProyectoId' in sin) && sin.Moneda === 'USD' && sin.Equipo === 'Administracion' && escGastos().filter(c => c.includes('/drives/')).length === nDrive);
+            // La subida falla a medias: el gasto queda registrado, se dice, y se sube despues con «Agregar comprobante»
+            DB.fallas.push({ metodo: 'PUT', incluye: '/drives/drive-gastos/', status: 500, veces: 1 });
+            $('btnNuevoGasto').click(); await esperar(() => $('dlgGasto').open, 'alta con falla');
+            poner('gaMonto', '640'); poner('gaConcepto', 'Material de oficina'); poner('gaEquipo', 'Administracion'); poner('gaFecha', ddmm(dia(-60)));
+            ponerArchivoEn('gaArchivo', archivoFalso('factura.pdf', 'application/pdf'));
+            const idFalla = DB.siguienteId;
+            $('formGasto').requestSubmit();
+            await esperar(() => !$('dlgGasto').open && avisoCon('comprobante no se subió'), 'aviso de subida fallida');
+            R.ok('subida fallida: el gasto quedó, sin comprobante, y se dice', gastoDB(idFalla).fields.Estado === 'registrado' && !gastoDB(idFalla).fields.ComprobanteItemId);
+            await esperar(() => filaG(idFalla, '#misGastos'), 'fila del gasto sin comprobante');
+            R.ok('subida fallida: el renglón ofrece «Agregar comprobante»', !!filaG(idFalla, '#misGastos').querySelector('[data-agregar-comprobante]') && /sin comprobante/.test(filaG(idFalla, '#misGastos').textContent));
+            const carpetaVieja = mesDe(dia(-60));
+            const okAg = await GS.agregarComprobante(idFalla, archivoFalso('factura.pdf', 'application/pdf'));
+            R.ok('agregar comprobante: crea la carpeta del mes del TICKET y sube «Factura»', okAg === true && DB.gastosDrive.carpetas.includes(carpetaVieja) && gastoDB(idFalla).fields.ComprobanteRuta === `${carpetaVieja}/${dia(-60).slice(0, 10)}_GASTO-${idFalla}_Factura_material-de-oficina.pdf`, gastoDB(idFalla).fields.ComprobanteRuta);
+            R.ok('agregar comprobante: no se repite en un gasto que ya lo tiene', (await GS.agregarComprobante(idFalla, archivoFalso('otra.jpg', 'image/jpeg'))) === false);
+            R.ok('agregar comprobante: un XML no es comprobante', GS.puedeAgregarComprobante(gastoDB(idSin) && { ...gastoDB(idSin).fields, id: idSin }) && (await GS.agregarComprobante(idSin, archivoFalso('cfdi.xml', 'text/xml'))) === false && !gastoDB(idSin).fields.ComprobanteItemId);
+            if (ERP === 'tesoreria') {
+                // Tesoreria captura por el empleado (decision 5): Solicitante = la persona, CapturadoPor = tesoreria
+                $('btnNuevoGasto').click(); await esperar(() => $('dlgGasto').open, 'alta por otra persona');
+                poner('gaPara', 'colega@example.invalid'); poner('gaMonto', '210'); poner('gaConcepto', 'Estacionamiento'); poner('gaEquipo', 'PITEPEC'); poner('gaNotas', 'Parquímetro');
+                const idOtro = DB.siguienteId;
+                $('formGasto').requestSubmit();
+                await esperar(() => !$('dlgGasto').open && gastoDB(idOtro), 'gasto por otra persona');
+                R.ok('tesorería captura por otro: Solicitante = la persona, CapturadoPor = tesorería', gastoDB(idOtro).fields.Solicitante === 'colega@example.invalid' && gastoDB(idOtro).fields.CapturadoPor === yo && !!avisoCon('Gasto registrado para Colega Demo'));
+            }
+            R.ok('Gastos: escribe SOLO en ERP_Gastos y en la biblioteca Gastos', escGastos().length > 0 && escGastos().every(c => c.includes('/lists/lista-gastos/') || c.startsWith('POST /drives/drive-gastos/root/children') || c.startsWith('PUT /drives/drive-gastos/root:/')), escGastos().filter(c => !c.includes('lista-gastos') && !c.includes('drive-gastos')).join(' | '));
+            R.ok('Gastos: en la biblioteca solo dentro de una carpeta AAAA-MM', escGastos().filter(c => c.startsWith('PUT /drives/')).every(c => /^PUT \/drives\/drive-gastos\/root:\/\d{4}-\d{2}\/[^/]+:\/content/.test(c)));
+            R.ok('Gastos: ni PROY_* ni PROY_Actividad', !escGastos().some(c => /lista-(proyectos|tareas|ligas|roles|actividad|capital)\//.test(c)));
+        } else {
+            R.ok('lectura: «Registrar gasto» dice por qué no', $('btnNuevoGasto').disabled && $('btnNuevoGasto').textContent === 'Registrar gasto: tu rol es de lectura');
+            R.ok('lectura: sin «Agregar comprobante» en sus gastos', !document.querySelector('[data-agregar-comprobante]'));
+            GS.abrirNuevoGasto(); await dormir(30);
+            R.ok('lectura: forzar «Registrar» no abre y lo dice', !$('dlgGasto').open && !!avisoCon('rol es de lectura'));
+            $('formGasto').requestSubmit(); await dormir(40);
+            R.ok('lectura: forzar el envío del formulario no escribe', !!avisoCon('rol es de lectura'));
+            const ag = await GS.agregarComprobante(gMioRech, archivoFalso('x.jpg', 'image/jpeg'));
+            R.ok('lectura: forzar «Agregar comprobante» se niega', ag === false);
+            R.ok('lectura: CERO escrituras también con Gastos', escrituras().length === 0, escrituras().join(' | '));
+        }
     }
     for (const d of document.querySelectorAll('dialog[open]')) d.close();
 } catch (e) {

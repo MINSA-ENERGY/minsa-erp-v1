@@ -1,4 +1,4 @@
-// ERP de MINSA ENERGY — v0.5.0 (fase 4 del plan, docs/plan.md; v0.5.0: Archivos (archivos.js), Documentos del proyecto, Equipo y la ficha con descripcion, documentos y notas; v0.4.0: sin iniciales en el kanban y «···» con Tema/Salir en celular; v0.3.0 sumó las escrituras del kanban, tarjetas.js). Sustituira a MINSA Proyectos.
+// ERP de MINSA ENERGY — v0.6.0 (fases 4 y 5 del plan, docs/plan.md; v0.6.0: Gastos (gastos.js: registrar con comprobante, Mis gastos y la cola de tesoreria); v0.5.0: Archivos (archivos.js), Documentos del proyecto, Equipo y la ficha con descripcion, documentos y notas; v0.4.0: sin iniciales en el kanban y «···» con Tema/Salir en celular; v0.3.0 sumó las escrituras del kanban, tarjetas.js). Sustituira a MINSA Proyectos.
 //
 // Entrada con Entra (MSAL por REDIRECCION, token en sessionStorage: la misma secuencia de Proyectos v0.160.0), lectura de
 // PROY_Proyectos / PROY_Tareas / PROY_Roles con el motor traido (graph.js + reglas.js + comun.js), y el ARMAZON: rail que en
@@ -13,6 +13,7 @@ import { $, L, VERSION, estado, el, avisar, fijarHash, iconoSvg, proyectoPorClav
 import { pintarInicio, pintarProyectos, pintarProyecto, pintarEquipo, pintarEnConstruccion, pintarNoEncontrado } from './pantallas.js';
 import { engancharTarjetas, alCambiarTareas, refrescarFicha } from './tarjetas.js';
 import { engancharArchivos, alCambiarArchivos, pintarArchivos } from './archivos.js';
+import { engancharGastos, alCambiarGastos, pintarGastos } from './gastos.js';
 
 // La redirect URI de produccion es la registrada en Entra; en cualquier otro host (localhost de la E2E) la pagina misma.
 const PRODUCCION = new URL(CONFIG.redirectProduccion);
@@ -82,10 +83,11 @@ function leerHash() {
     const h = decodeURIComponent(location.hash.replace(/^#/, ''));
     const m = /^p\/([^/]+)(?:\/([^/]+))?/.exec(h);
     if (m) return { pestana: 'proyecto', clave: m[1], tab: m[2] === 'docs' ? 'docs' : 'tablero' };
-    const p = h.split('/')[0];
+    const [p, sub] = h.split('/');
+    if (p === 'gastos') return { pestana: p, tab: sub === 'tesoreria' ? 'tesoreria' : 'mios' };   // v0.6.0: #gastos y #gastos/tesoreria
     return { pestana: DESTINOS.some(d => d.clave === p) ? p : 'inicio' };
 }
-function ir(pestana, clave, tab) { fijarHash(pestana === 'proyecto' ? '#p/' + clave + (tab === 'docs' ? '/docs' : '') : '#' + pestana); pintar(); }
+function ir(pestana, clave, tab) { fijarHash(pestana === 'proyecto' ? '#p/' + clave + (tab === 'docs' ? '/docs' : '') : pestana === 'gastos' && tab === 'tesoreria' ? '#gastos/tesoreria' : '#' + pestana); pintar(); }
 function pintar() {
     if (!estado.sesion) return;
     const r = leerHash();
@@ -106,10 +108,11 @@ function pintar() {
     }
     else if (r.pestana === 'archivos') pintarArchivos(v, nav);
     else if (r.pestana === 'equipo') pintarEquipo(v);
+    else if (r.pestana === 'gastos') pintarGastos(v, nav, r.tab);
     else pintarEnConstruccion(v, r.pestana, nav);
     document.title = 'MINSA ERP · ' + (r.pestana === 'proyecto' ? 'Proyecto' : DESTINOS.find(d => d.clave === r.pestana).nombre);
     v.dataset.pantalla = r.pestana;
-    if (r.pestana === 'proyecto') v.dataset.tab = r.tab; else delete v.dataset.tab;
+    if (r.tab) v.dataset.tab = r.tab; else delete v.dataset.tab;
 }
 window.addEventListener('popstate', pintar);
 window.addEventListener('hashchange', pintar);
@@ -183,9 +186,11 @@ async function cargarTodo() {
 function repintar() { if (!estado.sesion) return; contadores(); pintar(); refrescarFicha(); }   // v0.5.0: y los documentos y notas de la ficha abierta
 alCambiarTareas(repintar);
 alCambiarArchivos(repintar);
+alCambiarGastos(repintar);
 fijarReleer(async () => { try { await cargarTodo(); } catch (e) { avisar('No se pudo releer: ' + (e && e.message ? e.message : e), 'error'); } repintar(); });
 engancharTarjetas();
 engancharArchivos();
+engancharGastos();
 async function sesionIniciada() {
     estado.cuenta = pca.getActiveAccount() || pca.getAllAccounts()[0];
     let ultimo = await token();

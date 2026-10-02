@@ -1,4 +1,4 @@
-# MINSA ERP — app (v0.5.0, fase 4: Archivos y Equipo)
+# MINSA ERP — app (v0.6.0, fase 5: Gastos)
 
 PWA del ERP de MINSA ENERGY (`erp.minsaenergy.com`). Sustituirá a MINSA Proyectos: mismo login de Entra
 (se **reusa su app registration**), mismas listas `PROY_*` del sitio Administración, cara nueva. El plan vive en
@@ -56,7 +56,7 @@ como referencia de qué campos pinta cada pantalla, y las del ERP se escriben nu
 | `#inicio` (y todo hash desconocido) | Saludo + **Mis pendientes**: tareas abiertas de `PROY_Tareas` con `Asignado` = yo, agrupadas por vencimiento (vencidas · hoy · esta semana · más adelante · sin fecha); el rail lleva el contador (`misAbiertas`, la misma función). Debajo, los proyectos activos. |
 | `#proyectos` | Activos ordenados por `Vence` (por hacer / en curso / hechas por tarjeta) y los cerrados plegados. |
 | `#p/<clave>` | Tablero kanban del proyecto con **sus** cubetas (`Columnas`, o las 4 default) y una «Sin cubeta» si alguna tarjeta quedó en una borrada (no recibe arrastres). Desde v0.3.0 se escribe (arriba). |
-| `#gastos` | «En construcción», honesta: qué falta (fase 5). **`#archivos` y `#equipo` dejaron de serlo en v0.5.0** (abajo). |
+| `#gastos` · `#gastos/tesoreria` | **Desde v0.6.0**: registrar un gasto, «Mis gastos» y, para tesorería, la cola por reembolsar (abajo). Mientras `ERP_Gastos` no exista en el sitio, dice «Gastos aún no está habilitado — falta crear la lista». |
 
 Mismo formato de hash que Proyectos, así sus ligas `#p/<clave>` abren aquí. Tema: sin elección manda
 `prefers-color-scheme`; los botones Claro/Oscuro (en celular, «Tema» arriba) fijan `data-theme` y se recuerdan en
@@ -66,15 +66,15 @@ Lee `PROY_Proyectos`, `PROY_Tareas`, `PROY_Roles` (y las columnas reales de `PRO
 ## Pruebas
 
 ```
-npm test            # piel al día, selectores, comentarios, reglas (214), lote (27), sw, datos
-npm run test:e2e    # PowerShell + Edge headless, 3 roles: v0.5.0 = gerencia 143 · colaborador 142 · lectura 86 (v0.4.0: 83 · 82 · 54)
+npm test            # piel al día, selectores, comentarios, reglas (214), lote (27), gastos (47), sw, datos
+npm run test:e2e    # PowerShell + Edge headless, 5 corridas: v0.6.0 = gerencia 180 · colaborador 179 · lectura 107 · tesoreria 196 · sin-gastos 149 (v0.5.0: 143 · 142 · 86)
 node ../herramientas-dev/capturas.mjs --salida ../docs/capturas/v<versión>   # 390/1366 × claro/oscuro, mide desborde
 ```
 
 La E2E (`test/pruebas.html`) reusa **literal** el MSAL falso, el Graph falso y la bitácora del arnés de Proyectos.
 Escenarios de v0.2.0: entrada y rol, rail (5 destinos + 2 próximamente, `aria-current`, contador), grupos de Mis
 pendientes con fechas en hora de México, un título con HTML pintado como texto, de un pendiente a su proyecto, kanban
-con cubetas default/propias/«Sin cubeta», lista de proyectos, clave inexistente, las «en construcción» (desde v0.5.0 solo Gastos), hash
+con cubetas default/propias/«Sin cubeta», lista de proyectos, clave inexistente, las «en construcción» (desde v0.5.0 solo Gastos; desde v0.6.0 ninguna), hash
 desconocido, tema claro/oscuro con el color de fondo medido, y cero escrituras.
 
 Capturas de v0.2.0: `../docs/capturas/v0.2.0/` (Inicio y Proyecto, 390 y 1366, claro y oscuro; `_mediciones.txt`:
@@ -92,7 +92,7 @@ de este repo).
   Proyectos lo pinta igual y que `/archivar-calytek` reconoce el lote (PENDIENTE de Carlos, como el de `PROY_Tareas`).
 - Remoto: repo público en la org MINSA-ENERGY + GitHub Pages (decidido; **sin crear**, este repo no tiene remoto).
 - Medir el login real en `erp.minsaenergy.com` (la redirect URI la agregó Carlos en Entra, dicho por él, no medido).
-- Fase 5: lista y biblioteca «Gastos».
+- Fase 5: provisionar Gastos y escribir una vez en real (PENDIENTE de Carlos, sección v0.6.0); fase 6 (CFDI) sin empezar.
 
 ## Qué prueban las capturas de v0.2.0 (revisor-entregable, 2026-10-01)
 
@@ -167,3 +167,89 @@ notas) queda en SharePoint y Proyectos lo sigue pintando: es el mismo formato.
 `../docs/capturas/v0.5.0/`: inicio, proyecto, **archivos**, **equipo**, **docs** (pestaña Documentos) y **ficha**, a 390 y 1366,
 claro y oscuro, rol gerencia (24 PNG; `_mediciones.txt`: overflowX = 0 y fuera-de-ancho = 0 en las 24). Graph falso: ningún
 dato real; fotos del estado DESPUÉS de la E2E (por eso «INFORME DE PRUEBA», el lote «Informe de campo» y «Persona · Sí · 14»).
+
+## v0.6.0 (2026-10-01) — Gastos (fase 5 del plan)
+
+### Antes de que funcione: lo que tiene que correr Carlos
+
+**Hasta que Carlos provisione, `#gastos` dice «Gastos aún no está habilitado — falta crear la lista»** y el resto de la app
+sigue igual (la E2E corre la app entera sin esas listas: corrida `sin-gastos`). Para habilitarlo, una sola vez, con su cuenta:
+los 10 pasos de **`../docs/gastos-instrucciones-carlos.md`** (permiso temporal `manage`, `herramientas-dev/provisionar-gastos.html`
+crea `ERP_Gastos`, `ERP_Roles` y la biblioteca «Gastos» con su `_LEEME`, se regresa a `write`, versiones activadas y
+`ERP_Roles` sin herencia) y **capturar en `ERP_Roles` quién es tesorería**. Sin un renglón activo de tesorería nadie puede
+marcar un gasto como reembolsado (la pantalla lo dice si falta la lista `ERP_Roles`). Después, recargar la app.
+
+### Qué hace
+
+| Dónde | Quién | Qué |
+|---|---|---|
+| `#gastos` | quien escribe en la app (gerencia, colaborador) y tesorería | **«+ Registrar gasto»** (diálogo `.mn-dialog`, el botón dice qué falta): monto (total con IVA), moneda (MXN/USD), concepto, fecha del ticket (nace hoy; no futura), categoría, proyecto opcional (pone su equipo), equipo, notas, y el **comprobante opcional**: «Tomar foto» (`capture`, abre la cámara del celular) o «Elegir archivo» (foto o PDF). Sin comprobante, la nota es obligatoria (decisión 7). |
+| `#gastos` | todos | **Mis gastos** (por `Solicitante`): fecha, concepto, proyecto · equipo, monto en IBM Plex Mono con su moneda, estado (registrado · reembolsado · rechazado con quién y por qué), «Ver comprobante» (abre la liga de SharePoint), el chip de CFDI **solo si la columna trae valor**, y «por reembolsarte» sumado por moneda. |
+| renglón sin comprobante | su dueño, quien lo capturó o tesorería | **«Agregar comprobante»**: si la subida falló al registrar (o se registró sin ticket), se sube después. |
+| `#gastos/tesoreria` | **solo tesorería** (`ERP_Roles`, `Activo`) | La cola de **todo lo registrado** del equipo (lo más viejo arriba), con solicitante y «capturó X» si fue otra persona; **«Marcar reembolsado»** y **«Rechazar»** (motivo obligatorio); KPIs: por reembolsar (por moneda), reembolsado este mes (por la fecha del reembolso), sin comprobante; **totales por mes y moneda** (pesos y dólares nunca se suman); los resueltos plegados. Señala el gasto que **ya se había reembolsado** y volvió a «registrado» (guarda contra el doble pago) y pregunta antes de volver a marcarlo. Tesorería además **captura por el empleado** («Para quién», decisión 5). |
+
+Nadie más ve los botones de tesorería, y `marcarReembolsado`/`rechazarGasto` se niegan si se llaman a la fuerza (la E2E lo
+prueba en las corridas gerencia y colaborador). Lectura ve sus gastos y no escribe nada, ni forzando (corrida lectura: «CERO
+escrituras también con Gastos», tras forzar `abrirNuevoGasto`, el envío del formulario y `agregarComprobante`). Código: `gastos.js` (pantalla y escrituras) y
+`gastos-reglas.js` (reglas puras, `test/gastos.test.js`). `ERP_Gastos` y `ERP_Roles` se leen **al entrar a `#gastos`**, no al
+abrir la app.
+
+### Qué escribe y dónde
+
+| Acción | SharePoint (sitio Administracion) |
+|---|---|
+| Registrar | `ERP_Gastos` POST: `Title` (concepto), `Fecha` (18:00Z del día), `Monto`, `Moneda`, `Categoria`, `Equipo`, `ProyectoId`, `Solicitante`, `CapturadoPor`, `Estado=registrado`, `CfdiEstado=sin-cfdi`, `Notas` |
+| Comprobante | Biblioteca **«Gastos»** (su propio drive, `/sites/{id}/lists/{Gastos}/drive`, **no** la biblioteca Documentos): carpeta `AAAA-MM` del mes del **ticket** (la crea si no existe; 409 = ya estaba) y el archivo `AAAA-MM-DD_GASTO-<ID>_<Ticket|Factura>_<descripcion>.<ext>` con `conflictBehavior=fail`: **nunca sobrescribe**, si existe prueba `_2`, `_3`… Luego `ERP_Gastos` PATCH (If-Match) de **solo** `ComprobanteItemId` y `ComprobanteRuta` |
+| Marcar reembolsado | `ERP_Gastos` PATCH (If-Match): `Estado=reembolsado`, `ReembolsadoPor`, `ReembolsadoEl`. **Ningún otro PATCH de la app toca el sello**: no se limpia nunca |
+| Rechazar | `ERP_Gastos` PATCH (If-Match): `Estado=rechazado`, `RechazadoPor`, `RechazadoEl`, `MotivoRechazo` (255). El renglón y el comprobante se quedan |
+
+- **412**: no se pisa; se releen los gastos, se avisa y se puede volver a intentar.
+- **No escribe** ninguna `PROY_*` ni `PROY_Actividad` (su `Accion` es un choice cerrado y la decisión 6 congela su esquema): la
+  traza de Gastos es `CapturadoPor`/`ReembolsadoPor`/`RechazadoPor` más el historial de versiones de la lista (paso 10 de las
+  instrucciones). Por eso **«Escribió en la app» de Equipo no cuenta los gastos** todavía.
+- **Esquema**: `esquema.json` suma `ERP_Gastos`, `ERP_Roles` y la llave `bibliotecas`, idénticas a `../docs/gastos-esquema.json`
+  (lo coteja `test/gastos.test.js` si encuentra el archivo); las `PROY_*` no cambian. `config.js`: `listas.gastos`,
+  `listas.rolesErp`, `bibliotecaGastos`. `graph.js` suma `existeLista`, `driveDeLista`, `asegurarCarpetaEnDrive`, `subirADrive` e
+  `itemDeDriveId`.
+- **Columnas CFDI** (fase 6): solo se muestran si traen valor; al registrar se escribe `CfdiEstado=sin-cfdi` (el estado normal de la
+  decisión 8). La tarea semanal y la confirmación de contabilidad **no** están.
+- **PENDIENTE de Carlos — escribir una vez en real**: nada de esto se ha escrito contra SharePoint real. Después de provisionar:
+  registrar un gasto con foto desde el celular (ver que llegue a `Gastos/AAAA-MM/` con el nombre de la convención), otro sin
+  foto con nota, y marcar uno reembolsado y otro rechazado con la cuenta de tesorería.
+
+### Defaults del implementador (se revierten en una línea)
+
+- **Lectura no registra gastos** (como en el resto de la app); quien deba registrar necesita colaborador en `PROY_Roles` o
+  tesorería en `ERP_Roles`. Revertir: `PUEDE_GASTO.registrar` en `gastos-reglas.js`.
+- **Dos botones de comprobante** («Tomar foto» con `capture` y «Elegir archivo» sin él, como la maqueta) en vez de un solo
+  `<input capture>`: con `capture` el celular abre directo la cámara y no deja escoger un PDF. Revertir: el bloque del
+  comprobante en `dlgGasto` (`index.html`).
+- **Un solo comprobante por alta** (foto o PDF, hasta 25 MB). Un segundo archivo del mismo gasto se sube a mano a la misma
+  carpeta con el sufijo `_2` (lo dice el `_LEEME`). `COMPROBANTE_MAX_MB` en `gastos-reglas.js`.
+- **La fecha del ticket no puede ser futura**. Revertir: la condición `c.dia > c.hoy` de `faltanGasto`.
+- **`CfdiEstado=sin-cfdi` al registrar**. Revertir: quitarlo de `camposGasto`.
+- **Se lee la lista entera** de `ERP_Gastos` (tesorería necesita todo; ~11 personas, todos ven todo en SharePoint). Si crece,
+  filtrar por `Solicitante` (indexada) para quien no es tesorería, en `cargarGastos`.
+- **El empleado ve solo sus gastos en la app**; contabilidad no tiene pantalla todavía (llega con la fase 6).
+- **Nombre de quien no está en `PROY_Roles`**: se toma de `ERP_Roles.Nombre` (tesorería puede no tener rol de proyectos).
+
+### Cómo revertir
+
+`git revert` del commit de v0.6.0 en este repo (no toca datos). Por partes: quitar `gastos.js` y `gastos-reglas.js` (su import y
+`pintarGastos`/`engancharGastos` en `app.js`, sus dos renglones en `sw.js`, `test/gastos.test.js` en `package.json`) y el
+`<dialog id="dlgGasto">`; devolver `gastos` a `EN_CONSTRUCCION` en `pantallas.js`. Lo que ya se haya escrito en real
+(renglones de `ERP_Gastos`, comprobantes en «Gastos») se queda en SharePoint: el revert no lo borra.
+
+### Pruebas y capturas
+
+- `npm test`: + `test/gastos.test.js` (47: esquema fundido contra los catálogos, roles, cola, totales, nombre del comprobante,
+  lo que falta, campos que viajan).
+- `npm run test:e2e`: 5 corridas — gerencia 180 · colaborador 179 · lectura 107 · **tesoreria 196** (colaborador + tesorería en
+  `ERP_Roles`: cola, reembolsar con If-Match, doble pago, rechazar con motivo, 412, captura por otro) · **sin-gastos 149** (la app
+  entera sin `ERP_Gastos`/`ERP_Roles`/biblioteca). Graph falso con el drive de «Gastos» (`/drives/drive-gastos/…`, 409 de
+  verdad): alta con foto y choque de nombre (`_2`), alta sin foto con nota, subida que falla y «Agregar comprobante».
+- Capturas: `../docs/capturas/v0.6.0/`, 390 y 1366, claro y oscuro, **página completa** (`capturas.mjs --completa`; con un
+  diálogo abierto, además su pie en `*-pie`): gerencia = `gastos` (Mis gastos) y `nuevo-gasto`; tesoreria = `tesoreria` (cola,
+  KPIs, totales) y `nuevo-gasto` (con «Para quién»); sin-gastos = `gastos` («aún no habilitado»). Sin fotos repetidas de la
+  misma pantalla (`--plan`). `_mediciones.txt`: fixture, overflowX y fuera-de-ancho por foto. Graph falso: ningún dato real;
+  fotos del estado DESPUÉS de la E2E (por eso «Casetas a planta», «Taxi a la notaría» y el gasto de «Colega Demo»).
