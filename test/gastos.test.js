@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { rolesErpDe, PUEDE_GASTO, misGastos, porReembolsar, resueltos, yaReembolsadoAntes, mesDe, totalesPorMes, sumaPorMoneda,
     formatoMonto, etiquetaEstado, etiquetaCfdi, extComprobante, tipoComprobante, comprobanteValido, nombreComprobante, rutaComprobante,
-    faltanGasto, largoInvalido, camposGasto, camposReembolso, camposRechazo, ESTADOS_GASTO, MONEDAS, CATEGORIAS_GASTO, CFDI_ESTADOS, COMPROBANTE_MAX_MB } from '../gastos-reglas.js';
+    faltanGasto, largoInvalido, camposGasto, camposReembolso, camposRechazo, leerCandidatos, porConfirmarCfdi, uuidCorto, ligadoEnOtro, camposConfirmarCfdi,
+    camposNingunoCfdi, confirmadosDelMes, ESTADOS_GASTO, MONEDAS, CATEGORIAS_GASTO, CFDI_ESTADOS, COMPROBANTE_MAX_MB } from '../gastos-reglas.js';
 
 let n = 0;
 const ok = (nombre, cond) => { assert.ok(cond, nombre); n++; };
@@ -91,5 +92,21 @@ ok('falta: fecha vacia, invalida o futura', faltanGasto({ ...base, dia: '' })[0]
 ok('largo: concepto > 255', largoInvalido({ concepto: 'x'.repeat(256) }) !== '' && largoInvalido({ concepto: 'x'.repeat(255), notas: '' }) === '');
 ok('rechazo: motivo recortado a 255 y sin tocar el sello del reembolso', (() => { const r = camposRechazo('t', ' ' + 'm'.repeat(300)); return r.MotivoRechazo.length === 255 && !('ReembolsadoEl' in r) && !('ReembolsadoPor' in r) && r.Estado === 'rechazado'; })());
 ok('reembolso: sella quien y cuando', (() => { const r = camposReembolso('t@x', new Date('2026-10-01T12:00:00Z')); return r.Estado === 'reembolsado' && r.ReembolsadoPor === 't@x' && r.ReembolsadoEl === '2026-10-01T12:00:00.000Z'; })());
+
+// --- v0.7.0: CFDI (fase 6). El texto de abajo es el que escribe herramientas-cfdi/cruce_cfdi.py (ensure_ascii, sin espacios).
+const U1 = 'AAAAAAAA-0000-4000-8000-000000000001', U2 = 'BBBBBBBB-0000-4000-8000-000000000002', U9 = '99999999-0000-4000-8000-000000000009';
+const dePython = `[{"uuid":"${U1}","total":850.0,"fecha":"2026-09-22","emisor":"PAPELER\\u00cdA PE\\u00d1A","rfc":"PPE010101AAA","folio":"A12"},{"uuid":"${U2}","total":850.0,"fecha":"2026-09-01","emisor":"OTRO","rfc":"OTR010101AAA","folio":""},{"uuid":"${U9}","descartado":true}]`;
+ok('candidatos: lee lo que escribe cruce_cfdi.py (acentos por \\u, descartados aparte)', (() => { const r = leerCandidatos(dePython); return r.candidatos.length === 2 && r.candidatos[0].emisor === 'PAPELERÍA PEÑA' && r.candidatos[0].total === 850 && r.descartados.join() === U9; })());
+ok('candidatos: vacio, null, JSON roto o no-lista = nada (la pantalla no truena)', ['', null, undefined, '{x', '{"uuid":"a"}', '[1,null,{"x":1}]'].every(t => { const r = leerCandidatos(t); return !r.candidatos.length && !r.descartados.length; }));
+ok('candidatos: UUID en mayusculas y sin repetir', (() => { const r = leerCandidatos(JSON.stringify([{ uuid: U1.toLowerCase() }, { uuid: U1 }, { uuid: U2.toLowerCase(), descartado: true }, { uuid: U2, descartado: true }])); return r.candidatos.length === 1 && r.candidatos[0].uuid === U1 && r.descartados.join() === U2; })());
+ok('PUEDE_GASTO: contabilidad solo con su rol', PUEDE_GASTO.contabilidad(new Set(['contabilidad'])) && !PUEDE_GASTO.contabilidad(new Set(['tesoreria'])) && !PUEDE_GASTO.contabilidad(null));
+const gC = (id, extra) => ({ id, Fecha: '2026-09-1' + id + 'T18:00:00Z', Estado: 'registrado', CfdiEstado: 'propuesto', CfdiCandidatos: dePython, ...extra });
+ok('cola de contabilidad: propuesto con candidatos vivos, sin rechazados, lo mas viejo arriba', porConfirmarCfdi([gC(3), gC(1), gC(2, { Estado: 'rechazado' }), gC(4, { CfdiEstado: 'sin-cfdi' }), gC(5, { CfdiCandidatos: JSON.stringify([{ uuid: U9, descartado: true }]) }), gC(6, { Estado: 'reembolsado' })]).map(g => g.id).join() === '1,3,6');
+ok('uuidCorto: 8 caracteres y «…»', uuidCorto(U1.toLowerCase()) === 'AAAAAAAA…' && uuidCorto('') === '');
+ok('ligadoEnOtro: encuentra el otro gasto, no a si mismo, sin distinguir mayusculas', ligadoEnOtro([{ id: 1, CfdiUuid: U1 }, { id: 2 }], U1.toLowerCase(), 2)?.id === 1 && ligadoEnOtro([{ id: 1, CfdiUuid: U1 }], U1, 1) === null);
+ok('confirmar: liga, sella y vacia candidatos (solo columnas de ERP_Gastos)', (() => { const c = camposConfirmarCfdi(U1.toLowerCase(), 'm@x', new Date('2026-10-02T12:00:00Z')); return c.CfdiEstado === 'confirmado' && c.CfdiUuid === U1 && c.CfdiConfirmadoPor === 'm@x' && c.CfdiConfirmadoEl === '2026-10-02T12:00:00.000Z' && c.CfdiCandidatos === null && Object.keys(c).every(k => lista('ERP_Gastos').columnas.some(x => x.nombre === k)); })());
+ok('ninguno es: sin-cfdi y TODOS los UUID como descartados (los de antes primero)', (() => { const c = camposNingunoCfdi(dePython); return c.CfdiEstado === 'sin-cfdi' && c.CfdiCandidatos === JSON.stringify([{ uuid: U9, descartado: true }, { uuid: U1, descartado: true }, { uuid: U2, descartado: true }]); })());
+ok('ninguno es: sin nada que descartar deja la columna vacia', camposNingunoCfdi('').CfdiCandidatos === null);
+ok('confirmados del mes: por la fecha de confirmacion, y cuantos los marco la tarea', (() => { const r = confirmadosDelMes([{ CfdiEstado: 'confirmado', CfdiConfirmadoEl: '2026-10-01T12:00:00Z', CfdiConfirmadoPor: 'tarea-semanal' }, { CfdiEstado: 'confirmado', CfdiConfirmadoEl: '2026-10-02T12:00:00Z', CfdiConfirmadoPor: 'm@x' }, { CfdiEstado: 'confirmado', CfdiConfirmadoEl: '2026-09-30T12:00:00Z' }, { CfdiEstado: 'propuesto', CfdiConfirmadoEl: '2026-10-01T12:00:00Z' }], '2026-10'); return r.total === 2 && r.porTarea === 1; })());
 
 console.log(`gastos: ok (${n} comprobaciones)`);

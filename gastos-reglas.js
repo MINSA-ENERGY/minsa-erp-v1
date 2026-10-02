@@ -28,7 +28,9 @@ export function rolesErpDe(correo, rolesErp) {
 export const PUEDE_GASTO = {
     registrar: (rol, erp) => rol === 'gerencia' || rol === 'colaborador' || !!(erp && erp.has('tesoreria')),
     porOtro: erp => !!(erp && erp.has('tesoreria')),
-    tesoreria: erp => !!(erp && erp.has('tesoreria'))
+    tesoreria: erp => !!(erp && erp.has('tesoreria')),
+    // v0.7.0 (fase 6, decision 8): solo contabilidad confirma o descarta el CFDI que propuso la tarea semanal.
+    contabilidad: erp => !!(erp && erp.has('contabilidad'))
 };
 
 /** «Mis gastos» filtra por Solicitante (a quien se le reembolsa), del mas reciente al mas viejo. */
@@ -80,7 +82,7 @@ export function etiquetaEstado(estado) {
     if (estado === 'rechazado') return { texto: 'Rechazado', clase: 'danger' };
     return { texto: 'Registrado', clase: 'warn' };
 }
-/** El chip de CFDI SOLO si la columna trae valor (fase 6: la tarea semanal aun no existe): { texto, clase } o null. */
+/** El chip de CFDI SOLO si la columna trae valor: { texto, clase } o null. */
 export function etiquetaCfdi(estado) {
     if (estado === 'confirmado') return { texto: 'CFDI ✓', clase: 'ok' };
     if (estado === 'propuesto') return { texto: 'CFDI por confirmar', clase: 'info' };
@@ -165,3 +167,49 @@ export function camposGasto({ fechaIso, monto, moneda, concepto, categoria, equi
 export function camposReembolso(quien, ahora = new Date()) { return { Estado: 'reembolsado', ReembolsadoPor: quien, ReembolsadoEl: ahora.toISOString() }; }
 /** El rechazo de tesoreria: conserva renglon y comprobante; no toca los campos del reembolso. */
 export function camposRechazo(quien, motivo, ahora = new Date()) { return { Estado: 'rechazado', RechazadoPor: quien, RechazadoEl: ahora.toISOString(), MotivoRechazo: String(motivo || '').trim().slice(0, TEXTO_MAX) }; }
+
+// ---------------------------------------------------------------- CFDI (v0.7.0, fase 6, decision 8)
+// La tarea semanal de la laptop de Carlos (docs/proponer-cfdi.ps1 + herramientas-cfdi/cruce_cfdi.py) escribe CfdiCandidatos:
+// [{ uuid, total, fecha, emisor, rfc, folio }] y, para lo que contabilidad ya descarto en ESE gasto, { uuid, descartado: true }.
+
+const uuidNorm = u => String(u || '').trim().toUpperCase();
+/** CfdiCandidatos -> { candidatos (los vivos), descartados (UUID) }. Tolera vacio y JSON roto (nunca truena la pantalla). */
+export function leerCandidatos(texto) {
+    let v = [];
+    try { v = typeof texto === 'string' && texto.trim() ? JSON.parse(texto) : (Array.isArray(texto) ? texto : []); } catch (_) { v = []; }
+    const candidatos = [], descartados = [];
+    for (const x of Array.isArray(v) ? v : []) {
+        if (!x || typeof x !== 'object' || !x.uuid) continue;
+        const u = uuidNorm(x.uuid);
+        if (x.descartado) { if (!descartados.includes(u)) descartados.push(u); }
+        else if (!candidatos.some(c => c.uuid === u)) candidatos.push({ ...x, uuid: u, total: Number(x.total), emisor: String(x.emisor || ''), fecha: String(x.fecha || '') });
+    }
+    return { candidatos, descartados };
+}
+/** La cola de contabilidad: lo «propuesto» con al menos un candidato vivo (no lo rechazado), lo mas viejo arriba. */
+export function porConfirmarCfdi(gastos) {
+    return (gastos || []).filter(g => g.CfdiEstado === 'propuesto' && g.Estado !== 'rechazado' && leerCandidatos(g.CfdiCandidatos).candidatos.length)
+        .sort((a, b) => String(a.Fecha || '').localeCompare(String(b.Fecha || '')) || a.id - b.id);
+}
+/** «A1B2C3D4…»: los 8 primeros del UUID, para leerlo en pantalla (el completo va en el title). */
+export function uuidCorto(u) { const s = uuidNorm(u); return s.length > 8 ? s.slice(0, 8) + '…' : s; }
+/** El otro gasto que ya tiene ligado ese UUID (CfdiUuid), o null. Un CFDI no se liga a dos gastos. */
+export function ligadoEnOtro(gastos, uuid, id) {
+    const u = uuidNorm(uuid);
+    return (gastos || []).find(g => g.id !== id && uuidNorm(g.CfdiUuid) === u) || null;
+}
+/** «Confirmar este»: liga el UUID, sella quien y cuando, y vacia los candidatos. */
+export function camposConfirmarCfdi(uuid, quien, ahora = new Date()) {
+    return { CfdiEstado: 'confirmado', CfdiUuid: uuidNorm(uuid), CfdiConfirmadoPor: quien, CfdiConfirmadoEl: ahora.toISOString(), CfdiCandidatos: null };
+}
+/** «Ninguno es»: vuelve a sin-cfdi y guarda TODOS los UUID (los de antes y los propuestos) como descartados, para que la tarea no los re-proponga. */
+export function camposNingunoCfdi(textoCandidatos) {
+    const { candidatos, descartados } = leerCandidatos(textoCandidatos);
+    const todos = [...descartados, ...candidatos.map(c => c.uuid).filter(u => !descartados.includes(u))];
+    return { CfdiEstado: 'sin-cfdi', CfdiCandidatos: todos.length ? JSON.stringify(todos.map(uuid => ({ uuid, descartado: true }))) : null };
+}
+/** Tasa del mes (decision 8: «se mide la tasa de confirmacion al mes»): confirmados en el mes de `mes` (AAAA-MM, por CfdiConfirmadoEl), a mano o por la tarea. */
+export function confirmadosDelMes(gastos, mes) {
+    const del = (gastos || []).filter(g => g.CfdiEstado === 'confirmado' && (diaDe(g.CfdiConfirmadoEl) || '').slice(0, 7) === mes);
+    return { total: del.length, porTarea: del.filter(g => g.CfdiConfirmadoPor === 'tarea-semanal').length };
+}

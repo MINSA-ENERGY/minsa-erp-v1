@@ -1,4 +1,4 @@
-# MINSA ERP — app (v0.6.0, fase 5: Gastos)
+# MINSA ERP — app (v0.7.0, fase 6: CFDI de gastos)
 
 PWA del ERP de MINSA ENERGY (`erp.minsaenergy.com`). Sustituirá a MINSA Proyectos: mismo login de Entra
 (se **reusa su app registration**), mismas listas `PROY_*` del sitio Administración, cara nueva. El plan vive en
@@ -66,8 +66,9 @@ Lee `PROY_Proyectos`, `PROY_Tareas`, `PROY_Roles` (y las columnas reales de `PRO
 ## Pruebas
 
 ```
-npm test            # piel al día, selectores, comentarios, reglas (214), lote (27), gastos (47), sw, datos
-npm run test:e2e    # PowerShell + Edge headless, 5 corridas: v0.6.0 = gerencia 180 · colaborador 179 · lectura 107 · tesoreria 196 · sin-gastos 149 (v0.5.0: 143 · 142 · 86)
+npm test            # piel al día, selectores, comentarios, reglas (214), lote (27), gastos (58), sw, datos
+npm run test:e2e    # PowerShell + Edge headless, 6 corridas: v0.7.0 = gerencia 183 · colaborador 182 · lectura 110 · tesoreria 199 · contabilidad 197 · sin-gastos 149 (v0.6.0: 180 · 179 · 107 · 196 · — · 149)
+python ../herramientas-cfdi/test_cruce_cfdi.py   # v0.7.0: reglas del cruce con CFDI (25, una contra el índice real si está sincronizado)
 node ../herramientas-dev/capturas.mjs --salida ../docs/capturas/v<versión>   # 390/1366 × claro/oscuro, mide desborde
 ```
 
@@ -92,7 +93,7 @@ de este repo).
   Proyectos lo pinta igual y que `/archivar-calytek` reconoce el lote (PENDIENTE de Carlos, como el de `PROY_Tareas`).
 - Remoto: repo público en la org MINSA-ENERGY + GitHub Pages (decidido; **sin crear**, este repo no tiene remoto).
 - Medir el login real en `erp.minsaenergy.com` (la redirect URI la agregó Carlos en Entra, dicho por él, no medido).
-- Fase 5: provisionar Gastos y escribir una vez en real (PENDIENTE de Carlos, sección v0.6.0); fase 6 (CFDI) sin empezar.
+- Fase 5: provisionar Gastos y escribir una vez en real (PENDIENTE de Carlos, sección v0.6.0); fase 6 (CFDI): código hecho en v0.7.0, falta la primera corrida real (PENDIENTE de Carlos, sección v0.7.0).
 
 ## Qué prueban las capturas de v0.2.0 (revisor-entregable, 2026-10-01)
 
@@ -212,7 +213,7 @@ abrir la app.
   `listas.rolesErp`, `bibliotecaGastos`. `graph.js` suma `existeLista`, `driveDeLista`, `asegurarCarpetaEnDrive`, `subirADrive` e
   `itemDeDriveId`.
 - **Columnas CFDI** (fase 6): solo se muestran si traen valor; al registrar se escribe `CfdiEstado=sin-cfdi` (el estado normal de la
-  decisión 8). La tarea semanal y la confirmación de contabilidad **no** están.
+  decisión 8). La tarea semanal y la confirmación de contabilidad llegaron en **v0.7.0** (abajo).
 - **PENDIENTE de Carlos — escribir una vez en real**: nada de esto se ha escrito contra SharePoint real. Después de provisionar:
   registrar un gasto con foto desde el celular (ver que llegue a `Gastos/AAAA-MM/` con el nombre de la convención), otro sin
   foto con nota, y marcar uno reembolsado y otro rechazado con la cuenta de tesorería.
@@ -230,7 +231,7 @@ abrir la app.
 - **`CfdiEstado=sin-cfdi` al registrar**. Revertir: quitarlo de `camposGasto`.
 - **Se lee la lista entera** de `ERP_Gastos` (tesorería necesita todo; ~11 personas, todos ven todo en SharePoint). Si crece,
   filtrar por `Solicitante` (indexada) para quien no es tesorería, en `cargarGastos`.
-- **El empleado ve solo sus gastos en la app**; contabilidad no tiene pantalla todavía (llega con la fase 6).
+- **El empleado ve solo sus gastos en la app**; contabilidad tiene su pestaña desde v0.7.0.
 - **Nombre de quien no está en `PROY_Roles`**: se toma de `ERP_Roles.Nombre` (tesorería puede no tener rol de proyectos).
 
 ### Cómo revertir
@@ -253,3 +254,90 @@ abrir la app.
   KPIs, totales) y `nuevo-gasto` (con «Para quién»); sin-gastos = `gastos` («aún no habilitado»). Sin fotos repetidas de la
   misma pantalla (`--plan`). `_mediciones.txt`: fixture, overflowX y fuera-de-ancho por foto. Graph falso: ningún dato real;
   fotos del estado DESPUÉS de la E2E (por eso «Casetas a planta», «Taxi a la notaría» y el gasto de «Colega Demo»).
+
+## v0.7.0 (2026-10-02) — CFDI de gastos (fase 6 del plan, decisión 8)
+
+### Las tres piezas
+
+```
+laptop de Carlos (lunes 09:00)                         la app (#gastos/contabilidad)
+  ../docs/proponer-cfdi.ps1                              cola «CFDI por confirmar» (solo contabilidad)
+    [-DescargarSat] descargar_sat.py incremental           «Confirmar este» → confirmado + CfdiUuid
+    lee ERP_Gastos  →  ../herramientas-cfdi/cruce_cfdi.py  «Ninguno es»    → sin-cfdi + descartados
+    plan JSON (simula)  /  -Aplicar: PATCH con If-Match
+```
+
+| Pieza | Dónde | Qué |
+|---|---|---|
+| Reglas | `../herramientas-cfdi/cruce_cfdi.py` (Python stdlib) + `test_cruce_cfdi.py` | Gastos (JSON) + uno o más `indice.csv` → plan JSON. Recibidas tipo I, MXN, no canceladas; total **al centavo**; ±30 días; índices unidos por UUID (si alguno dice cancelado, gana); fuera lo ya ligado (`CfdiUuid`) y lo descartado para ESE gasto. Se marca sola (`tarea-semanal`) solo con un candidato que ningún otro gasto comparte. El plan trae su propio chequeo del invariante; si se rompe, sale con 3 y el script no escribe. |
+| Script | `../docs/proponer-cfdi.ps1` v1.0.0 (ASCII con BOM) | Patrón del exporte de Proyectos: código de dispositivo, refresh token DPAPI en `%LOCALAPPDATA%\MINSA\minsa-erp-cfdi.token`, `-Programada`, transcript y `_ultima-corrida.json`, sello de versión y hora. **Simula por omisión**; `-Aplicar` escribe con If-Match (412 = se omite, no se pisa) y relee lo escrito. Instrucciones: `../docs/cfdi-instrucciones-carlos.md`. |
+| App | `gastos.js` (`pintarContabilidad`, `confirmarCfdi`, `ningunoCfdi`) y `gastos-reglas.js` | Pestaña **Contabilidad** en `#gastos/contabilidad` (con «por confirmar N»), visible solo con `ERP_Roles` contabilidad; KPIs por confirmar · confirmados este mes (y cuántos marcó la tarea: la tasa de la decisión 8) · sin CFDI. Cada gasto con sus candidatos: emisor, fecha, RFC, total, UUID corto (completo en el title). |
+
+### Qué escribe y dónde
+
+| Acción | `ERP_Gastos` (PATCH con If-Match) |
+|---|---|
+| Tarea, candidato único no compartido | `CfdiEstado=confirmado`, `CfdiUuid`, `CfdiConfirmadoPor=tarea-semanal`, `CfdiConfirmadoEl`, `CfdiCandidatos=null` |
+| Tarea, varios o compartido | `CfdiEstado=propuesto`, `CfdiCandidatos=[{uuid,total,fecha,emisor,rfc,folio}…, {uuid,descartado:true}…]` |
+| Tarea, ninguno | `CfdiEstado=sin-cfdi` (y los descartados que ya hubiera) — solo si cambió algo |
+| «Confirmar este» | Antes relee `fields/CfdiUuid eq '<UUID>'` (indexada): si otro gasto ya lo tiene, se niega y nombra cuál. Luego `confirmado`, `CfdiUuid`, `CfdiConfirmadoPor` = correo, `CfdiConfirmadoEl`, `CfdiCandidatos=null` |
+| «Ninguno es» | Pregunta antes. `CfdiEstado=sin-cfdi`, `CfdiCandidatos` = todos los UUID (los de antes y los propuestos) como `{uuid, descartado:true}` |
+
+- **Esquema**: no cambia; todas son columnas Cfdi* que ya existen en el tenant (`gastos-esquema.json`). La E2E coteja cada PATCH contra `esquema.json`.
+- **Roles**: `confirmarCfdi` / `ningunoCfdi` se niegan si se llaman a la fuerza sin el rol (corridas gerencia, colaborador, lectura, tesoreria).
+- **412**: no se pisa; se releen los gastos, se avisa y el segundo intento escribe (E2E).
+
+### Defaults del implementador (se revierten en una línea)
+
+- **Reglas en Python stdlib**, no en JS: corren en la laptop junto a `descargar_sat.py` sin Node, y la prueba contra el
+  índice real (7,219 renglones) no tiene que pasar por el navegador. La app solo lee/escribe el formato (sus reglas en
+  `gastos-reglas.js`, probadas con un texto literal de lo que escribe Python). Revertir: portar `cruzar()` a JS.
+- **Gastos evaluados**: `CfdiEstado` vacío, `sin-cfdi` o `propuesto`; **solo MXN** (no hay CFDI en dólares que cruzar,
+  decisión de las reglas); **se salta lo `rechazado`** (no roba un CFDI a otro gasto). `ESTADOS_EVALUADOS` y `evaluable()`
+  en `cruce_cfdi.py`.
+- **Día del gasto en hora de México con UTC-6 fijo** (sin horario de verano desde 2022; `zoneinfo` no trae zonas en
+  Windows sin `tzdata`). La fecha del CFDI se toma tal cual (hora local del emisor). `MEXICO` en `cruce_cfdi.py`.
+- **Ventana ±30 días inclusive**; `VENTANA_DIAS` o `--ventana`.
+- **Se guardan hasta 10 candidatos** por gasto (los más cercanos en fecha); la regla de unicidad cuenta todos.
+  `MAX_CANDIDATOS`.
+- **`CfdiCandidatos` en ASCII** (`ensure_ascii`): viaja intacto por PowerShell 5.1; `JSON.parse` lo devuelve con acentos.
+- **«Ninguno es» descarta TODOS los candidatos mostrados** (no uno por uno) y pide confirmación. Revertir: quitar el
+  `confirmar(...)` de `ningunoCfdi` o descartar por candidato.
+- **Sin CFDI = estado normal**: KPI informativo, sin rojo ni contador en el rail.
+- **El plan y la copia de gastos viven en `%LOCALAPPDATA%\MINSA\erp-cfdi\`** (datos reales; fuera del repo y del
+  respaldo). `-Programar` registra **lunes 09:00** con `-Aplicar -DescargarSat -Programada`; cambiar el disparador en
+  `proponer-cfdi.ps1` (sección 6).
+- **Si `descargar_sat.py` falla**, la corrida sigue con los índices que ya hay y lo anota en `_ultima-corrida.json`.
+- **Rol**: Mayeul tiene tesorería y contabilidad (`ERP_Roles`, 2-oct): ve las tres pestañas.
+
+### Cómo revertir
+
+`git revert` del commit de v0.7.0 en este repo (la pestaña y sus reglas; no toca datos). Fuera de este repo, borrar
+`../herramientas-cfdi/`, `../docs/proponer-cfdi.ps1` y `../docs/cfdi-instrucciones-carlos.md`, y si ya se registró, la tarea
+«MINSA - CFDI semanal del ERP». Lo que la tarea o Mayeul ya escribieron en `ERP_Gastos` se queda (son columnas de la
+lista); para regresar un gasto, `CfdiEstado=sin-cfdi` y vaciar `CfdiUuid`/`CfdiCandidatos` en SharePoint.
+
+### PENDIENTE de Carlos — la primera corrida real
+
+1. Paso 8 de `../docs/gastos-instrucciones-carlos.md` hecho (sitio en `write`).
+2. `proponer-cfdi.ps1` en simulación, revisar el plan, luego `-Aplicar` (`../docs/cfdi-instrucciones-carlos.md`).
+3. Con la cuenta de Mayeul: confirmar uno y «Ninguno es» en otro; ver que la siguiente corrida no los re-propone.
+4. `-Programar` cuando convenza.
+
+### Pruebas y capturas
+
+- `npm test`: `gastos` 47 → **58** (candidatos de Python con acentos por `\u`, JSON roto, cola, UUID ligado, campos de
+  confirmar/«Ninguno es» contra el esquema, tasa del mes).
+- `npm run test:e2e`: **6 corridas** — la nueva `contabilidad` (197): pestaña y chip, cola ordenada (sin el rechazado ni el
+  propuesto vacío), candidato con emisor/fecha/RFC/total/UUID corto, emisor con HTML como texto, KPIs, confirmar el
+  SEGUNDO candidato (relee `CfdiUuid eq`, PATCH con If-Match de 5 campos), UUID ya ligado en SharePoint que el gasto local
+  no conocía (se niega y nombra el gasto), «Ninguno es» (cancelar no escribe; aceptar guarda los 2 descartados), 412 y
+  segundo intento, cola vacía. Las otras corridas: sin pestaña, `#gastos/contabilidad` cae en Mis gastos y forzar se niega.
+- `python ../herramientas-cfdi/test_cruce_cfdi.py`: **25** (24 casos sintéticos + 1 contra el índice maestro real, solo
+  lectura: 155 gastos sintéticos de agosto 2026 → 47 marcados solos · 58 propuestos (21 por ambigüedad cruzada) · 50 sin
+  candidatos · **0 marcas automáticas ambiguas**, recontado aparte).
+- Capturas: `../docs/capturas/v0.7.0/`, rol contabilidad, 390 y 1366, claro y oscuro, página completa
+  (`--plan "contabilidad:contabilidad" --completa`; `_mediciones.txt`: overflowX = 0 y fuera-de-ancho = 0 en las 4). La E2E
+  deja la cola vacía, así que `capturas.mjs` siembra antes dos gastos propuestos (`PREP`). Graph falso: ningún dato real.
+- **No probado**: nada contra el tenant real (login del script, lectura y PATCH de `ERP_Gastos`, el filtro `CfdiUuid eq`
+  en SharePoint, la tarea programada, `-DescargarSat`).

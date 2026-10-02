@@ -1,4 +1,4 @@
-// ERP de MINSA ENERGY — v0.6.0 (fases 4 y 5 del plan, docs/plan.md; v0.6.0: Gastos (gastos.js: registrar con comprobante, Mis gastos y la cola de tesoreria); v0.5.0: Archivos (archivos.js), Documentos del proyecto, Equipo y la ficha con descripcion, documentos y notas; v0.4.0: sin iniciales en el kanban y «···» con Tema/Salir en celular; v0.3.0 sumó las escrituras del kanban, tarjetas.js). Sustituira a MINSA Proyectos.
+// ERP de MINSA ENERGY — v0.7.0 (fases 4 a 6 del plan, docs/plan.md; v0.7.0: la cola «CFDI por confirmar» de contabilidad (gastos.js); v0.6.0: Gastos (gastos.js: registrar con comprobante, Mis gastos y la cola de tesoreria); v0.5.0: Archivos (archivos.js), Documentos del proyecto, Equipo y la ficha con descripcion, documentos y notas; v0.4.0: sin iniciales en el kanban y «···» con Tema/Salir en celular; v0.3.0 sumó las escrituras del kanban, tarjetas.js). Sustituira a MINSA Proyectos.
 //
 // Entrada con Entra (MSAL por REDIRECCION, token en sessionStorage: la misma secuencia de Proyectos v0.160.0), lectura de
 // PROY_Proyectos / PROY_Tareas / PROY_Roles con el motor traido (graph.js + reglas.js + comun.js), y el ARMAZON: rail que en
@@ -84,10 +84,10 @@ function leerHash() {
     const m = /^p\/([^/]+)(?:\/([^/]+))?/.exec(h);
     if (m) return { pestana: 'proyecto', clave: m[1], tab: m[2] === 'docs' ? 'docs' : 'tablero' };
     const [p, sub] = h.split('/');
-    if (p === 'gastos') return { pestana: p, tab: sub === 'tesoreria' ? 'tesoreria' : 'mios' };   // v0.6.0: #gastos y #gastos/tesoreria
+    if (p === 'gastos') return { pestana: p, tab: sub === 'tesoreria' || sub === 'contabilidad' ? sub : 'mios' };   // v0.6.0: #gastos y #gastos/tesoreria; v0.7.0: #gastos/contabilidad
     return { pestana: DESTINOS.some(d => d.clave === p) ? p : 'inicio' };
 }
-function ir(pestana, clave, tab) { fijarHash(pestana === 'proyecto' ? '#p/' + clave + (tab === 'docs' ? '/docs' : '') : pestana === 'gastos' && tab === 'tesoreria' ? '#gastos/tesoreria' : '#' + pestana); pintar(); }
+function ir(pestana, clave, tab) { fijarHash(pestana === 'proyecto' ? '#p/' + clave + (tab === 'docs' ? '/docs' : '') : pestana === 'gastos' && (tab === 'tesoreria' || tab === 'contabilidad') ? '#gastos/' + tab : '#' + pestana); pintar(); }
 function pintar() {
     if (!estado.sesion) return;
     const r = leerHash();

@@ -14,6 +14,8 @@
      v0.6.0: Gastos (seccion 12) — Mis gastos, registrar con y sin comprobante (drive falso de «Gastos» con 409 real), la subida
      que falla y «Agregar comprobante»; ?erp=tesoreria = la cola, reembolsar, rechazar, doble pago, 412 y captura por otro;
      ?gastos=no = la app entera sin ERP_Gastos/ERP_Roles/biblioteca (#gastos lo dice; lo demas pasa igual).
+     v0.7.0 (seccion 12b): ?erp=contabilidad = la cola «CFDI por confirmar» — confirmar (relee CfdiUuid eq antes), UUID ya ligado
+     en SharePoint, «Ninguno es» con sus descartados, 412; en las demas corridas, que nadie mas la ve ni la fuerza.
      Los ~2,800 renglones de escenarios de Proyectos prueban sus VISTAS (tablero, docs, chat, capital...), que no se
      trajeron; vuelven por pantalla en la fase 4. Sin CSP a proposito (herramienta de desarrollo, _config.yml la
      excluye de Pages). Se corre desde app/ con `npm run test:e2e` (PowerShell + Edge headless, 3 roles). -->
@@ -345,12 +347,17 @@ try {
     const XSS_GASTO = '<img src=x onerror="window.__xss3=1">Comida en campo';
     const GA = fields => { const id = DB.siguienteId++; DB.listas.gastos.items.push({ id, fields }); return id; };
     let gMio, gMioReemb, gMioRech, gColega, gDoble, gColegaReemb;
+    let gC1, gC2, gC3;   // v0.7.0: CFDI propuestos (corrida ?erp=contabilidad)
+    const UA = 'AAAAAAAA-1111-4000-8000-00000000000A', UB = 'BBBBBBBB-1111-4000-8000-00000000000B', UD = 'DDDDDDDD-1111-4000-8000-00000000000D',
+        UE = 'EEEEEEEE-1111-4000-8000-00000000000E', UF = 'FFFFFFFF-1111-4000-8000-00000000000F', UZ = '99999999-1111-4000-8000-000000000009';
+    const XSS_EMISOR = '<img src=x onerror="window.__xss4=1">EMISOR CON ETIQUETA';
     if (SIN_GASTOS) { delete DB.listas.gastos; delete DB.listas.rolesErp; delete DB.listas.bibGastos; }
     else {
         const RE = fields => DB.listas.rolesErp.items.push({ id: DB.siguienteId++, fields });
         RE({ Title: 'tesorera@example.invalid', Nombre: 'Tesorera Demo', Rol: 'tesoreria', Activo: true });
         RE({ Title: 'jefa@example.invalid', Nombre: 'Jefa Demo', Rol: 'contabilidad', Activo: true });
         RE({ Title: yo, Nombre: 'Persona de Prueba', Rol: 'tesoreria', Activo: ERP === 'tesoreria' });   // inactivo = no es tesoreria
+        RE({ Title: yo, Nombre: 'Persona de Prueba', Rol: 'contabilidad', Activo: ERP === 'contabilidad' });   // v0.7.0
         const rutaSembrada = `${mesDe(dia(-2))}/${dia(-2).slice(0, 10)}_GASTO-0_Ticket_gasolina.jpg`;
         DB.gastosDrive.carpetas.push(mesDe(dia(-2)));
         DB.gastosDrive.archivos.push({ id: 'gasto-arch-sembrado', ruta: rutaSembrada, nombre: rutaSembrada.split('/')[1], webUrl: 'https://minsaenergy.sharepoint.com/sites/Administracion/Gastos/' + rutaSembrada });
@@ -360,6 +367,17 @@ try {
         gColega = GA({ Title: XSS_GASTO, Fecha: dia(-6), Monto: 460, Moneda: 'MXN', Equipo: 'PITEPEC', ProyectoId: pit, Solicitante: 'colega@example.invalid', CapturadoPor: 'colega@example.invalid', Estado: 'registrado', Notas: 'Fonda, no dan ticket', CfdiEstado: 'propuesto' });
         gDoble = GA({ Title: 'Casetas Monterrey–planta', Fecha: dia(-8), Monto: 1558, Moneda: 'MXN', Equipo: 'CALYTEK', Solicitante: 'colega@example.invalid', CapturadoPor: 'tesorera@example.invalid', Estado: 'registrado', ReembolsadoPor: 'tesorera@example.invalid', ReembolsadoEl: dia(-7), ComprobanteItemId: 'gasto-arch-sembrado', ComprobanteRuta: rutaSembrada });
         gColegaReemb = GA({ Title: 'Copias del expediente', Fecha: dia(-1), Monto: 312, Moneda: 'MXN', Equipo: 'CALYTEK', Solicitante: 'colega@example.invalid', CapturadoPor: 'colega@example.invalid', Estado: 'reembolsado', ReembolsadoPor: 'tesorera@example.invalid', ReembolsadoEl: dia(0) });
+        // v0.7.0: lo que dejo la tarea semanal (el formato de herramientas-cfdi/cruce_cfdi.py). Solo en la corrida de contabilidad, para no mover
+        // las cuentas de las otras corridas (cola de tesoreria, resueltos, Mis gastos).
+        if (ERP === 'contabilidad') {
+            const cand = (uuid, total, d, emisor, rfc = 'XAXX010101000', folio = 'A1') => ({ uuid, total, fecha: d.slice(0, 10), emisor, rfc, folio });
+            const C = (Title, n, Monto, cands, extra = {}) => GA({ Title, Fecha: dia(n), Monto, Moneda: 'MXN', Equipo: 'CALYTEK', Solicitante: 'colega@example.invalid', CapturadoPor: 'colega@example.invalid', Estado: 'registrado', CfdiEstado: 'propuesto', CfdiCandidatos: JSON.stringify(cands), ...extra });
+            gC1 = C('Papelería del expediente', -20, 850, [cand(UA, 850, dia(-18), 'PAPELERÍA DEMO', 'PDE010101AAA', 'A12'), cand(UB, 850, dia(-25), XSS_EMISOR), { uuid: UZ, descartado: true }]);
+            gC2 = C('Hotel en Monterrey', -15, 1740, [cand(UD, 1740, dia(-15), 'HOTEL DEMO')]);
+            gC3 = C('Comida con el gestor', -10, 312.5, [cand(UE, 312.5, dia(-9), 'FONDA UNO'), cand(UF, 312.5, dia(-3), 'FONDA DOS')]);
+            C('Rechazado con candidatos', -12, 99, [cand('CCCCCCCC-0000-4000-8000-00000000000C', 99, dia(-12), 'NO SALE')], { Estado: 'rechazado' });
+            GA({ Title: 'Gasolina marcada por la tarea', Fecha: dia(-30), Monto: 600, Moneda: 'MXN', Equipo: 'PITEPEC', Solicitante: 'colega@example.invalid', CapturadoPor: 'colega@example.invalid', Estado: 'reembolsado', CfdiEstado: 'confirmado', CfdiUuid: 'DDDDDDDD-0000-4000-8000-00000000000D', CfdiConfirmadoPor: 'tarea-semanal', CfdiConfirmadoEl: new Date().toISOString() });
+        }
     }
 
     // 2. Arrancar la app: el MSAL falso «vuelve del login» y la sesion se abre sola.
@@ -367,7 +385,7 @@ try {
     await esperar(() => !$('pantallaSesion').classList.contains('oculto'), 'pantalla de sesion', 15000);
     await esperar(() => pantalla(), 'primera pantalla');
     R.ok('entra con MSAL y oculta la entrada', $('pantallaEntrar').classList.contains('oculto'));
-    R.ok('pie con la version', $('pie').textContent === 'MINSA ERP v0.6.0', $('pie').textContent);
+    R.ok('pie con la version', $('pie').textContent === 'MINSA ERP v0.7.0', $('pie').textContent);
     R.ok('celular: «···» lleva Tema y Salir', !!document.querySelector('#masMovil #temaMovil') && !!document.querySelector('#masMovil #btnSalirMovil'));
     R.ok('nombre de PROY_Roles, no el correo', $('quien').textContent === 'Persona de Prueba', $('quien').textContent);
     R.ok('rol leido de PROY_Roles', $('rolQuien').textContent === ROL, $('rolQuien').textContent);
@@ -875,11 +893,81 @@ try {
             R.ok('412: tras releer, el segundo intento escribe', gastoDB(gMio).fields.ReembolsadoPor === yo);
             document.querySelector('#tabsGastos [data-tab="mios"]').click(); await esperar(() => $('misGastos'), 'de vuelta a Mis gastos');
         } else {
-            R.ok('no tesorería: sin pestaña Tesorería ni sus botones', !$('tabsGastos') && !document.querySelector('[data-reembolsar], [data-rechazar]'));
+            R.ok('no tesorería: sin pestaña Tesorería ni sus botones', (ERP === 'contabilidad' ? !!$('tabsGastos') : !$('tabsGastos')) && !document.querySelector('#tabsGastos [data-tab="tesoreria"]') && !document.querySelector('[data-reembolsar], [data-rechazar]'));
             await irA('#gastos/tesoreria', 'gastos'); await esperar(() => $('misGastos'), 'Mis gastos por #gastos/tesoreria');
             R.ok('no tesorería: #gastos/tesoreria enseña Mis gastos, sin la cola', !$('colaTesoreria') && !document.querySelector('[data-reembolsar]'));
             const r1 = await GS.marcarReembolsado(gColega); const r2 = await GS.rechazarGasto(gColega);
             R.ok('no tesorería: forzar reembolsar/rechazar se niega y lo dice', r1 === false && r2 === false && !$('dlg').open && !!avisoCon('Solo tesorería') && gastoDB(gColega).fields.Estado === 'registrado' && !escGastos().some(c => c.startsWith('PATCH')));
+            await irA('#gastos', 'gastos'); await esperar(() => $('misGastos'), 'Mis gastos');
+        }
+
+        // 12b. v0.7.0: CONTABILIDAD — la cola «CFDI por confirmar» (fase 6, decision 8)
+        const patchesDe = id => escGastos().filter(c => c.startsWith('PATCH') && c.includes(`/lists/lista-gastos/items/${id}/`)).length;
+        if (ERP === 'contabilidad') {
+            const tabC = document.querySelector('#tabsGastos [data-tab="contabilidad"]');
+            R.ok('contabilidad: pestañas Mis gastos · Contabilidad con «por confirmar 3», sin Tesorería', !!tabC && tabC.querySelector('.mn-chip')?.textContent === 'por confirmar 3' && !document.querySelector('#tabsGastos [data-tab="tesoreria"]'), tabC && tabC.textContent);
+            tabC.click(); await esperar(() => $('colaCfdi'), 'cola de CFDI');
+            R.ok('contabilidad: #gastos/contabilidad', location.hash === '#gastos/contabilidad' && vista().dataset.tab === 'contabilidad', location.hash);
+            const idsCola = () => [...document.querySelectorAll('#colaCfdi [data-cfdi-gasto]')].map(b => Number(b.dataset.cfdiGasto));
+            R.ok('contabilidad: la cola = propuesto con candidatos (ni el rechazado ni el propuesto vacío), el más viejo arriba', idsCola().join(',') === [gC1, gC2, gC3].join(','), idsCola().join(','));
+            const cands = id => [...document.querySelectorAll(`#colaCfdi [data-cfdi-gasto="${id}"] .cfdi-cand`)];
+            const c1 = cands(gC1);
+            R.ok('contabilidad: cada candidato con emisor, fecha, total y UUID corto (el descartado no sale)', c1.length === 2 && c1[0].dataset.uuid === UA && /PAPELERÍA DEMO/.test(c1[0].textContent) && c1[0].querySelector('.monto').textContent === '$850.00 MXN' && c1[0].querySelector('.cfdi-uuid').textContent === 'UUID AAAAAAAA…' && c1[0].querySelector('.cfdi-uuid').title === UA && /PDE010101AAA/.test(c1[0].textContent) && !document.querySelector(`#colaCfdi [data-uuid="${UZ}"]`), c1.map(c => c.textContent).join(' | '));
+            R.ok('contabilidad: un emisor con HTML se pinta como texto', c1[1].querySelector('.cfdi-emisor').textContent === XSS_EMISOR && !vista().querySelector('img') && !window.__xss4);
+            R.ok('contabilidad: el gasto dice de quién es y su monto', /Colega Demo/.test(document.querySelector(`#colaCfdi [data-cfdi-gasto="${gC1}"] .gasto`).textContent) && document.querySelector(`#colaCfdi [data-cfdi-gasto="${gC1}"] .gasto .monto`).textContent === '$850.00 MXN');
+            const kpiC = k => document.querySelector(`#cfdiKpis [data-kpi="${k}"]`);
+            const sinCfdiDB = () => DB.listas.gastos.items.filter(i => i.fields.CfdiEstado === 'sin-cfdi' && i.fields.Estado !== 'rechazado').length;
+            R.ok('contabilidad: KPIs por confirmar 3 · confirmados este mes 1 (1 la tarea) · sin CFDI', kpiC('por-confirmar').querySelector('.v').textContent === '3' && kpiC('confirmados-mes').querySelector('.v').textContent === '1' && /1 lo marcó la tarea/.test(kpiC('confirmados-mes').textContent) && kpiC('sin-cfdi').querySelector('.v').textContent === String(sinCfdiDB()), [...document.querySelectorAll('#cfdiKpis .v')].map(x => x.textContent).join(','));
+            // Confirmar este (el SEGUNDO candidato): relee si el UUID ya esta ligado y escribe con If-Match
+            const nIf = DB.ifMatch, nFil = DB.filtros.length;
+            document.querySelector(`[data-confirmar-cfdi="${gC1}|${UB}"]`).click();
+            await esperar(() => gastoDB(gC1).fields.CfdiEstado === 'confirmado', 'CFDI confirmado');
+            const f1 = gastoDB(gC1).fields;
+            R.ok('confirmar: antes relee de SharePoint si el UUID ya está ligado (CfdiUuid eq)', DB.filtros.slice(nFil).includes(`fields/CfdiUuid eq '${UB}'`), DB.filtros.slice(nFil).join(' | '));
+            R.ok('confirmar: PATCH con If-Match de CfdiEstado + CfdiUuid + quién/cuándo, y vacía los candidatos', Object.keys(DB.ultimoPatch.gastos).sort().join(',') === 'CfdiCandidatos,CfdiConfirmadoEl,CfdiConfirmadoPor,CfdiEstado,CfdiUuid' && f1.CfdiUuid === UB && f1.CfdiConfirmadoPor === yo && /^\d{4}-\d{2}-\d{2}T/.test(f1.CfdiConfirmadoEl) && !('CfdiCandidatos' in f1) && DB.ifMatch > nIf && enEsquema(DB.ultimoPatch.gastos, 'ERP_Gastos').length === 0, JSON.stringify(DB.ultimoPatch.gastos));
+            await esperar(() => !document.querySelector(`#colaCfdi [data-cfdi-gasto="${gC1}"]`), 'sale de la cola');
+            R.ok('confirmar: sale de la cola, lo dice y cuenta en «confirmados este mes»', !!avisoCon('CFDI confirmado') && kpiC('confirmados-mes').querySelector('.v').textContent === '2' && document.querySelector('#tabsGastos [data-tab="contabilidad"] .mn-chip')?.textContent === 'por confirmar 2');
+            // Ya ligado a otro gasto en SharePoint (otra persona lo confirmo despues de nuestra lectura): no se liga dos veces
+            const idOtro = DB.siguienteId++;
+            DB.listas.gastos.items.push({ id: idOtro, fields: { Title: 'Hotel (captura repetida)', Fecha: dia(-15), Monto: 1740, Moneda: 'MXN', Equipo: 'CALYTEK', Solicitante: 'jefa@example.invalid', Estado: 'registrado', CfdiEstado: 'confirmado', CfdiUuid: UD } });
+            const p2 = patchesDe(gC2);
+            document.querySelector(`[data-confirmar-cfdi="${gC2}|${UD}"]`).click();
+            await esperar(() => avisoCon('ya está ligado'), 'aviso de ya ligado');
+            R.ok('confirmar: un UUID ya ligado a otro gasto (releído de SharePoint) no se liga y lo dice', patchesDe(gC2) === p2 && gastoDB(gC2).fields.CfdiEstado === 'propuesto' && /Hotel \(captura repetida\)/.test(avisoCon('ya está ligado').textContent) && /Jefa Demo/.test(avisoCon('ya está ligado').textContent));
+            document.querySelector('#avisos .cerrar')?.click();
+            // Ninguno es: pregunta; cancelar no escribe; aceptar vuelve a sin-cfdi y guarda los descartados
+            const p3 = patchesDe(gC3);
+            document.querySelector(`[data-ninguno-cfdi="${gC3}"]`).click(); await esperar(() => $('dlg').open, 'confirmación de Ninguno es');
+            R.ok('ninguno es: pregunta antes y dice que no se vuelven a proponer', /Ninguno es/.test($('dlgTitulo').textContent) && /esas 2 facturas ya no se vuelven a proponer/.test($('dlgTexto').textContent));
+            $('dlgCancelar').click(); await dormir(60);
+            R.ok('ninguno es: cancelar no escribe', patchesDe(gC3) === p3 && gastoDB(gC3).fields.CfdiEstado === 'propuesto');
+            document.querySelector(`[data-ninguno-cfdi="${gC3}"]`).click(); await esperar(() => $('dlg').open, 'Ninguno es otra vez');
+            $('dlgOk').click();
+            await esperar(() => gastoDB(gC3).fields.CfdiEstado === 'sin-cfdi', 'sin-cfdi');
+            R.ok('ninguno es: sin-cfdi y los 2 UUID quedan como descartados (para que la tarea no los re-proponga)', Object.keys(DB.ultimoPatch.gastos).sort().join(',') === 'CfdiCandidatos,CfdiEstado' && gastoDB(gC3).fields.CfdiCandidatos === JSON.stringify([{ uuid: UE, descartado: true }, { uuid: UF, descartado: true }]) && !gastoDB(gC3).fields.CfdiUuid, gastoDB(gC3).fields.CfdiCandidatos);
+            // 412 en «Ninguno es»: no pisa, relee, y el segundo intento escribe
+            gastoDB(gC2).etag = (gastoDB(gC2).etag || 1) + 5;
+            const nLect = DB.llamadas.filter(c => c.includes('/lists/lista-gastos/items?')).length;
+            document.querySelector(`[data-ninguno-cfdi="${gC2}"]`).click(); await esperar(() => $('dlg').open, 'Ninguno es con 412');
+            $('dlgOk').click();
+            await esperar(() => avisoCon('Alguien cambió ese gasto'), 'aviso del 412');
+            R.ok('412: no pisa, avisa y relee', gastoDB(gC2).fields.CfdiEstado === 'propuesto' && DB.llamadas.filter(c => c.includes('/lists/lista-gastos/items?')).length > nLect);
+            await esperar(() => document.querySelector(`[data-ninguno-cfdi="${gC2}"]`), 'releído');
+            document.querySelector(`[data-ninguno-cfdi="${gC2}"]`).click(); await esperar(() => $('dlg').open, 'Ninguno es tras releer');
+            R.ok('ninguno es: con un solo candidato lo dice en singular', /esa factura ya no se vuelve a proponer/.test($('dlgTexto').textContent));
+            $('dlgOk').click();
+            await esperar(() => gastoDB(gC2).fields.CfdiEstado === 'sin-cfdi', 'sin-cfdi tras releer');
+            await esperar(() => document.querySelector('#colaCfdi .vacio'), 'cola vacía');
+            R.ok('contabilidad: cola vacía lo dice', /No hay CFDI por confirmar/.test($('colaCfdi').textContent) && !document.querySelector('#tabsGastos [data-tab="contabilidad"] .mn-chip'));
+            R.ok('contabilidad: forzar confirmar un UUID que ya no está propuesto se niega', (await GS.confirmarCfdi(gC3, UE)) === false && gastoDB(gC3).fields.CfdiEstado === 'sin-cfdi');
+            document.querySelector('#tabsGastos [data-tab="mios"]').click(); await esperar(() => $('misGastos'), 'de vuelta a Mis gastos');
+        } else {
+            R.ok('no contabilidad: sin pestaña Contabilidad ni sus botones', !document.querySelector('#tabsGastos [data-tab="contabilidad"]') && !document.querySelector('[data-confirmar-cfdi], [data-ninguno-cfdi]'));
+            await irA('#gastos/contabilidad', 'gastos'); await esperar(() => $('misGastos'), 'Mis gastos por #gastos/contabilidad');
+            R.ok('no contabilidad: #gastos/contabilidad enseña Mis gastos, sin la cola', !$('colaCfdi') && !document.querySelector('[data-confirmar-cfdi]'));
+            const p0 = patchesDe(gColega);   // en la corrida de tesoreria ya se reembolso (un PATCH): se cuenta desde aqui
+            const r1 = await GS.confirmarCfdi(gColega, UA); const r2 = await GS.ningunoCfdi(gColega);
+            R.ok('no contabilidad: forzar confirmar/«Ninguno es» se niega y lo dice', r1 === false && r2 === false && !$('dlg').open && !!avisoCon('Solo contabilidad') && patchesDe(gColega) === p0 && gastoDB(gColega).fields.CfdiEstado === 'propuesto');
             await irA('#gastos', 'gastos'); await esperar(() => $('misGastos'), 'Mis gastos');
         }
 

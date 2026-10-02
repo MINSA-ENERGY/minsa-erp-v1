@@ -3,8 +3,9 @@
 # ASCII puro a proposito (PS 5.1 lee sin BOM como ANSI).
 # v0.6.0: dos corridas mas. 'tesoreria' = colaborador que ademas es tesoreria en ERP_Roles; 'sin-gastos' = colaborador SIN
 # ERP_Gastos/ERP_Roles/biblioteca (antes de que Carlos provisione): todo lo demas debe pasar igual.
-param([string[]]$Roles = @('gerencia', 'colaborador', 'lectura', 'tesoreria', 'sin-gastos'))
-$consulta = @{ 'tesoreria' = 'rol=colaborador&erp=tesoreria'; 'sin-gastos' = 'rol=colaborador&gastos=no' }
+# v0.7.0: 'contabilidad' = colaborador que ademas es contabilidad en ERP_Roles (la cola "CFDI por confirmar").
+param([string[]]$Roles = @('gerencia', 'colaborador', 'lectura', 'tesoreria', 'contabilidad', 'sin-gastos'))
+$consulta = @{ 'tesoreria' = 'rol=colaborador&erp=tesoreria'; 'contabilidad' = 'rol=colaborador&erp=contabilidad'; 'sin-gastos' = 'rol=colaborador&gastos=no' }
 $app = Split-Path -Parent $PSScriptRoot
 $edge = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 if (-not (Test-Path $edge)) { Write-Host "No esta Edge en $edge"; exit 1 }

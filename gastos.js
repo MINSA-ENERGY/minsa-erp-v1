@@ -7,6 +7,9 @@
 //   - Escribe SOLO en ERP_Gastos (sitio Administracion) y en la biblioteca «Gastos» del mismo sitio, en su carpeta AAAA-MM,
 //     sin sobrescribir nunca (conflictBehavior fail -> sufijo _2). No escribe PROY_* ni PROY_Actividad (su Accion es un
 //     choice cerrado y la decision 6 congela su esquema).
+//   - v0.7.0 (fase 6, decision 8) — Contabilidad (ERP_Roles): #gastos/contabilidad, la cola «CFDI por confirmar» con los
+//     candidatos que dejo la tarea semanal (docs/proponer-cfdi.ps1); «Confirmar este» (liga CfdiUuid tras releer que no
+//     este ligado a otro gasto) o «Ninguno es» (sin-cfdi y los UUID quedan descartados para ESE gasto).
 //   - Degrada: si ERP_Gastos no existe en el sitio (Carlos aun no corre herramientas-dev/provisionar-gastos.html), la
 //     pantalla lo dice y el resto de la app sigue igual. Se lee al entrar a #gastos, no al abrir la app.
 // Las reglas puras viven en gastos-reglas.js (test/gastos.test.js). Nada de innerHTML: el() / textContent.
@@ -18,7 +21,8 @@ import { $, L, estado, el, boton, chip, avisar, abrirDialogo, cerrarDialogo, con
 import { esConflicto } from './graph.js';
 import { rolesErpDe, PUEDE_GASTO, misGastos, porReembolsar, resueltos, yaReembolsadoAntes, totalesPorMes, sumaPorMoneda,
     formatoMonto, etiquetaEstado, etiquetaCfdi, tipoComprobante, extComprobante, comprobanteValido, nombreComprobante,
-    rutaComprobante, faltanGasto, largoInvalido, camposGasto, camposReembolso, camposRechazo, CATEGORIAS_GASTO, MONEDAS } from './gastos-reglas.js';
+    rutaComprobante, faltanGasto, largoInvalido, camposGasto, camposReembolso, camposRechazo, CATEGORIAS_GASTO, MONEDAS,
+    leerCandidatos, porConfirmarCfdi, uuidCorto, ligadoEnOtro, camposConfirmarCfdi, camposNingunoCfdi, confirmadosDelMes } from './gastos-reglas.js';
 import { cabecera, hojaDia } from './pantallas.js';
 
 /** Estado del modulo. lista: null = no se sabe todavia · true = existe · false = FALTA en el sitio (se deja de preguntar hasta
@@ -36,6 +40,7 @@ const nombre = correo => nombreDe(correo, [...estado.roles, ...G.rolesErp].filte
 /** Mis roles de Gastos (ERP_Roles), como Set. */
 export const misRolesErp = () => rolesErpDe(yo(), G.rolesErp);
 const esTesoreria = () => PUEDE_GASTO.tesoreria(misRolesErp());
+const esContabilidad = () => PUEDE_GASTO.contabilidad(misRolesErp());
 const puedeRegistrar = () => PUEDE_GASTO.registrar(estado.rol, misRolesErp());
 /** Lista de frases: «a», «a y b», «a, b y c». */
 const enLista = xs => xs.length < 2 ? xs.join('') : xs.slice(0, -1).join(', ') + ' y ' + xs[xs.length - 1];
@@ -80,8 +85,9 @@ export function pintarGastos(v, nav, sub = 'mios') {
     }
     if (G.lista === false) { pintarNoHabilitado(v); return; }
 
-    const tes = esTesoreria();
-    const cab = cabecera('Gastos', tes ? 'Tus gastos y la cola de tesorería' : '', 'Con o sin factura, con o sin ticket');
+    const tes = esTesoreria(), cont = esContabilidad();
+    const sub2 = tes && cont ? 'Tus gastos, la cola de tesorería y los CFDI por confirmar' : tes ? 'Tus gastos y la cola de tesorería' : cont ? 'Tus gastos y los CFDI por confirmar' : '';
+    const cab = cabecera('Gastos', sub2, 'Con o sin factura, con o sin ticket');
     if (puedeRegistrar()) {
         const b = boton('+ Registrar gasto', 'mn-btn is-primary', () => abrirNuevoGasto()); b.id = 'btnNuevoGasto'; cab.appendChild(b);
     } else {
@@ -92,21 +98,26 @@ export function pintarGastos(v, nav, sub = 'mios') {
     v.appendChild(info);
     if (!G.rolesLista) v.appendChild(el('p', 'muted nota-gastos', `Falta la lista ${L.rolesErp} en el sitio: todavía nadie es tesorería, así que nadie puede marcar un gasto como reembolsado.`));
 
-    const enTes = tes && sub === 'tesoreria';
-    if (tes) {
+    // Pestañas: solo quien tiene un rol de Gastos (tesoreria y/o contabilidad); a los demas, «Mis gastos» sin pestañas.
+    // Un sub al que no se tiene derecho (#gastos/contabilidad sin el rol) pinta «Mis gastos».
+    const actual = sub === 'tesoreria' && tes ? 'tesoreria' : sub === 'contabilidad' && cont ? 'contabilidad' : 'mios';
+    if (tes || cont) {
         const tabs = el('div', 'tabs-proyecto'); tabs.setAttribute('role', 'tablist'); tabs.id = 'tabsGastos';
-        const n = porReembolsar(G.gastos).length;
-        for (const [k, texto] of [['mios', 'Mis gastos'], ['tesoreria', 'Tesorería']]) {
-            const on = (k === 'tesoreria') === enTes;
+        const nTes = porReembolsar(G.gastos).length, nCont = porConfirmarCfdi(G.gastos).length;
+        const pestanas = [['mios', 'Mis gastos', 0, '']];
+        if (tes) pestanas.push(['tesoreria', 'Tesorería', nTes, `por reembolsar ${nTes}`]);
+        if (cont) pestanas.push(['contabilidad', 'Contabilidad', nCont, `por confirmar ${nCont}`]);
+        for (const [k, texto, n, etq] of pestanas) {
+            const on = k === actual;
             const b = el('button', 'tab' + (on ? ' is-on' : '')); b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.tab = k; b.setAttribute('aria-selected', String(on));
             b.appendChild(el('span', '', texto));
-            if (k === 'tesoreria' && n) b.appendChild(chip(`por reembolsar ${n}`, 'warn'));
+            if (n) b.appendChild(chip(etq, k === 'tesoreria' ? 'warn' : 'info'));
             b.addEventListener('click', () => nav.ir('gastos', null, k));
             tabs.appendChild(b);
         }
         v.appendChild(tabs);
     }
-    if (enTes) pintarTesoreria(v); else pintarMios(v);
+    if (actual === 'tesoreria') pintarTesoreria(v); else if (actual === 'contabilidad') pintarContabilidad(v); else pintarMios(v);
 }
 
 function pintarNoHabilitado(v) {
@@ -231,6 +242,85 @@ function filaGasto(g, { conQuien = false, tesoreria = false } = {}) {
     }
     f.appendChild(est);
     return f;
+}
+
+// ---------------------------------------------------------------- contabilidad: CFDI por confirmar (v0.7.0, fase 6, decision 8)
+
+/** #gastos/contabilidad: lo que la tarea semanal propuso, cada gasto con sus candidatos y «Confirmar este» / «Ninguno es». */
+function pintarContabilidad(v) {
+    const cola = porConfirmarCfdi(G.gastos);
+    const mes = fechaMexico().slice(0, 7);
+    const conf = confirmadosDelMes(G.gastos, mes);
+    const kpis = el('div', 'gastos-kpis'); kpis.id = 'cfdiKpis';
+    for (const [clave, lbl, valor, pie] of [
+        ['por-confirmar', 'Por confirmar', String(cola.length), `${plural(cola.length, 'gasto')} con candidatos de la tarea semanal`],
+        ['confirmados-mes', 'Confirmados este mes', String(conf.total), `${conf.porTarea} ${conf.porTarea === 1 ? 'lo marcó' : 'los marcó'} la tarea sola (candidato único)`],
+        ['sin-cfdi', 'Sin CFDI', String(G.gastos.filter(g => g.CfdiEstado === 'sin-cfdi' && g.Estado !== 'rechazado').length), 'es normal: no todo gasto trae factura']
+    ]) {
+        const k = el('div', 'card gastos-kpi'); k.dataset.kpi = clave;
+        k.appendChild(el('div', 'lbl', lbl)); k.appendChild(el('div', 'v', valor)); k.appendChild(el('div', 'f', pie));
+        kpis.appendChild(k);
+    }
+    v.appendChild(kpis);
+
+    const card = el('section', 'card'); card.id = 'colaCfdi';
+    const cab = el('div', 'card-cab'); cab.appendChild(el('h2', 'h2', 'CFDI por confirmar')); cab.appendChild(el('span', 'mn-chip', String(cola.length)));
+    card.appendChild(cab);
+    card.appendChild(el('p', 'muted', 'Cada semana la tarea busca en el SAT facturas recibidas con el mismo total, al centavo, y a 30 días o menos de la fecha del gasto. Elige la que corresponde; si ninguna es, ya no se vuelven a proponer para ese gasto.'));
+    const lista = el('div', 'gastos-lista');
+    for (const g of cola) {
+        const bloque = el('div', 'cfdi-gasto'); bloque.dataset.cfdiGasto = String(g.id);
+        bloque.appendChild(filaGasto(g, { conQuien: true }));
+        const { candidatos } = leerCandidatos(g.CfdiCandidatos);
+        const cands = el('div', 'cfdi-candidatos'); cands.setAttribute('role', 'list'); cands.setAttribute('aria-label', `Facturas candidatas para «${g.Title || 'gasto'}»`);
+        for (const c of candidatos) {
+            const f = el('div', 'cfdi-cand'); f.setAttribute('role', 'listitem'); f.dataset.uuid = c.uuid;
+            const d = el('div', 'cfdi-cand-datos');
+            d.appendChild(el('div', 'cfdi-emisor', c.emisor || '(emisor sin nombre)'));
+            const m = el('div', 'gasto-meta');
+            m.appendChild(el('span', '', c.fecha ? 'factura del ' + fechaCorta(c.fecha + 'T18:00:00Z') : 'sin fecha'));
+            if (c.rfc) m.appendChild(el('span', '', c.rfc));
+            const u = el('span', 'cfdi-uuid', 'UUID ' + uuidCorto(c.uuid)); u.title = c.uuid; m.appendChild(u);
+            d.appendChild(m);
+            f.appendChild(d);
+            f.appendChild(el('div', 'monto num', formatoMonto(c.total, 'MXN')));
+            f.appendChild(boton('Confirmar este', 'mn-btn is-sm is-primary', () => confirmarCfdi(g.id, c.uuid), { confirmarCfdi: g.id + '|' + c.uuid }));
+            cands.appendChild(f);
+        }
+        bloque.appendChild(cands);
+        const pie = el('div', 'cfdi-pie');
+        pie.appendChild(boton('Ninguno es', 'mn-btn is-sm', () => ningunoCfdi(g.id), { ningunoCfdi: g.id }));
+        bloque.appendChild(pie);
+        lista.appendChild(bloque);
+    }
+    if (!cola.length) card.appendChild(el('p', 'vacio', 'No hay CFDI por confirmar. La tarea semanal propone aquí lo que encuentre; lo que tenía un solo candidato claro ya se marcó solo.'));
+    card.appendChild(lista);
+    v.appendChild(card);
+}
+
+/** Solo contabilidad. Antes de ligar, relee de SharePoint si ese UUID ya esta en otro gasto (CfdiUuid, indexada): un CFDI no se liga dos veces. */
+export async function confirmarCfdi(id, uuid) {
+    if (!esContabilidad()) { avisar('Solo contabilidad confirma el CFDI de un gasto.', 'error'); return false; }
+    const g = porId(G.gastos, id); if (!g) { avisar('Ese gasto ya no existe.', 'ojo'); return false; }
+    const u = String(uuid || '').trim().toUpperCase();
+    if (g.CfdiEstado !== 'propuesto' || !leerCandidatos(g.CfdiCandidatos).candidatos.some(c => c.uuid === u)) { avisar('Ese CFDI ya no está propuesto para este gasto.', 'ojo'); return false; }
+    let otro = ligadoEnOtro(G.gastos, u, g.id);
+    if (!otro) {
+        try { otro = ligadoEnOtro(await estado.cliente.renglones(estado.siteId, L.gastos, `fields/CfdiUuid eq '${u.replace(/'/g, "''")}'`), u, g.id); }
+        catch (e) { avisar('No se pudo revisar si ese CFDI ya está ligado: ' + motivo(e), 'error'); return false; }
+    }
+    if (otro) { avisar(`Ese CFDI ya está ligado a «${otro.Title || 'otro gasto'}» de ${nombre(otro.Solicitante)}. No se liga dos veces.`, 'error'); return false; }
+    return escribirEstado(g, camposConfirmarCfdi(u, yo()), `CFDI confirmado: «${g.Title}» ↔ ${uuidCorto(u)}.`);
+}
+/** Solo contabilidad. Vuelve a sin-cfdi y guarda los UUID propuestos como descartados (la tarea no los re-propone). */
+export async function ningunoCfdi(id) {
+    if (!esContabilidad()) { avisar('Solo contabilidad descarta los CFDI propuestos.', 'error'); return false; }
+    const g = porId(G.gastos, id); if (!g) { avisar('Ese gasto ya no existe.', 'ojo'); return false; }
+    if (g.CfdiEstado !== 'propuesto') { avisar('Ese gasto ya no tiene CFDI propuestos.', 'ojo'); return false; }
+    const n = leerCandidatos(g.CfdiCandidatos).candidatos.length;
+    const r = await confirmar({ titulo: 'Ninguno es', texto: `«${g.Title}» (${formatoMonto(g.Monto, g.Moneda)}) queda sin CFDI y ${n === 1 ? 'esa factura ya no se vuelve' : `esas ${n} facturas ya no se vuelven`} a proponer para este gasto. Sin CFDI es un estado normal.`, ok: 'Ninguno es' });
+    if (!r.ok) return false;
+    return escribirEstado(g, camposNingunoCfdi(g.CfdiCandidatos), `Sin CFDI: «${g.Title}».`);
 }
 
 // ---------------------------------------------------------------- comprobante (biblioteca «Gastos»)

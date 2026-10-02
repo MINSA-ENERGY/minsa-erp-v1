@@ -402,7 +402,22 @@ button.kc:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; 
 .ga-botones .mn-btn { flex: 1; }
 .ga-archivo { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1.5px dashed var(--line); border-radius: 10px; color: var(--text-strong); overflow-wrap: anywhere; }
 .ga-archivo span { min-width: 0; }
+/* v0.7.0 — contabilidad: «CFDI por confirmar». Cada gasto lleva debajo sus facturas candidatas, sangradas bajo el concepto. */
+.cfdi-gasto { padding-bottom: 12px; border-bottom: 1px solid var(--line-soft); }
+.cfdi-gasto:last-child { border-bottom: 0; }
+.cfdi-gasto > .gasto { border-bottom: 0; padding-bottom: 6px; }
+.cfdi-candidatos { display: flex; flex-direction: column; gap: 6px; margin-left: 56px; }
+.cfdi-cand { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 8px 12px; background: var(--sunken); border: 1px solid var(--line-soft); border-radius: 10px; }
+.cfdi-cand-datos { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cfdi-emisor { color: var(--text-strong); font-weight: 500; overflow-wrap: anywhere; }
+.cfdi-uuid { font-family: var(--font-data); }
+.cfdi-cand .monto { font-size: 15px; font-weight: 500; color: var(--text-strong); white-space: nowrap; }
+.cfdi-pie { display: flex; justify-content: flex-end; margin: 8px 0 0 56px; }
 @media (max-width: 720px) {
+  .cfdi-candidatos, .cfdi-pie { margin-left: 0; }
+  .cfdi-cand { grid-template-columns: minmax(0, 1fr) auto; }
+  .cfdi-cand .mn-btn { grid-column: 1 / -1; }
+  .cfdi-pie { justify-content: flex-start; }
   .gasto { grid-template-columns: auto minmax(0, 1fr); }
   .gasto .monto { grid-column: 2; text-align: left; }
   .gasto-estado { grid-column: 2; justify-content: flex-start; max-width: none; }
