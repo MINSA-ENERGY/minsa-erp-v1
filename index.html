@@ -28,7 +28,7 @@
 </head>
 <body>
 
-<!-- ERP v0.3.0 (escrituras del kanban: dialogos al final) · v0.2.0 — fase 4, arranque: armazon (rail que colapsa a pestañas, tema claro/oscuro, ruta por hash), Inicio · Mis
+<!-- ERP v0.5.0 (Archivos, Documentos del proyecto, Equipo; la ficha con descripcion, documentos y notas) · v0.3.0 (escrituras del kanban: dialogos al final) · v0.2.0 — fase 4, arranque: armazon (rail que colapsa a pestañas, tema claro/oscuro, ruta por hash), Inicio · Mis
      pendientes, Proyectos y el tablero de un proyecto (solo lectura). Archivos, Gastos y Equipo: «en construcción». -->
 <section id="pantallaEntrar" class="entrar">
   <img class="logo solo-claro" src="./marca/lockup.svg" alt="MINSA ENERGY" width="724" height="256">
@@ -105,10 +105,69 @@
         <div class="mn-field"><label for="fPrioridad">Prioridad</label><select id="fPrioridad"><option value="alta">Alta</option><option value="normal">Normal</option><option value="baja">Baja</option></select></div>
       </div>
       <div class="mn-field"><label for="fVence">Vence</label><input id="fVence"></div>
+      <div class="mn-field"><label for="fDesc">Descripción</label><textarea id="fDesc" rows="3" placeholder="Opcional"></textarea></div>
       <div id="fMoverCaja" class="mover-caja"><div class="lbl">Mover a</div><div id="fMover" class="mover" role="group" aria-label="Mover a otra cubeta"></div></div>
+      <!-- v0.5.0: documentos y notas de la tarjeta (archivos.js y la bitacora PROY_Actividad, Accion=comentar) -->
+      <section class="ficha-sec" aria-labelledby="fDocsCab"><div class="lbl" id="fDocsCab">Documentos <span id="fDocsN" class="n"></span></div><div id="fDocs" class="docs-ficha"></div><div id="fDocsAltas"></div></section>
+      <section class="ficha-sec" aria-labelledby="fNotasCab"><div class="lbl" id="fNotasCab">Notas <span id="fNotasN" class="n"></span></div><div id="fNotas" class="notas"></div>
+        <div id="fAnotarCaja" class="anotar"><label class="oculto-visual" for="fNota">Nueva nota</label><textarea id="fNota" rows="2" maxlength="250" placeholder="Anota algo (máx. 250)"></textarea><button id="fAnotar" class="mn-btn is-sm" type="button">Anotar</button></div></section>
     </div>
     <div class="mn-dialog-foot"><button id="fBorrar" class="mn-btn borrar oculto" type="button">Borrar tarjeta</button><button id="fGuardar" class="mn-btn" type="submit" disabled>Sin cambios</button></div>
   </form>
+</dialog>
+
+<!-- v0.5.0: Archivos (archivos.js), los dialogos de MINSA Proyectos v0.160.0 (docs.js) con la piel del ERP -->
+<dialog id="dlgSubir" class="mn-dialog dlg-erp" aria-labelledby="sbCab">
+  <form id="formSubir" novalidate>
+    <div class="mn-dialog-head"><div><h2 id="sbCab">Subir a SharePoint</h2><div id="sbBiblioteca" class="lbl"></div></div></div>
+    <div class="mn-dialog-body">
+      <div class="dlg-avisos" role="status" aria-live="polite"></div>
+      <div id="sbProyectoCampo" class="mn-field"><label for="sbProyecto">Proyecto</label><select id="sbProyecto"></select></div>
+      <div class="mn-field"><label for="sbConcepto">Qué es</label><input id="sbConcepto" maxlength="120" autocomplete="off" placeholder="Borrador de filosofía de operación"></div>
+      <div class="dos">
+        <div class="mn-field"><label for="sbTarea">Tarjeta (opcional)</label><select id="sbTarea"></select></div>
+        <div class="mn-field"><label for="sbArchivos">Archivos o fotos</label><input id="sbArchivos" type="file" multiple></div>
+      </div>
+      <p class="nota-lectura">Se guarda en la biblioteca de la unidad, en su buzón 99_Pendiente-Archivar, en una carpeta con fecha y un _lote.json al final. La skill de archivar lo acomoda después; mientras tanto dice «en el buzón».</p>
+      <p id="sbProgreso" class="progreso" role="status" aria-live="polite"></p>
+    </div>
+    <div class="mn-dialog-foot"><button id="sbCancelar" class="mn-btn" type="button">Cancelar</button><button id="sbGuardar" class="mn-btn" type="submit" disabled>Falta qué es y los archivos</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlgLigar" class="mn-dialog dlg-erp" aria-labelledby="lgCab">
+  <div class="mn-dialog-head"><div><h2 id="lgCab">Ligar un archivo ya archivado</h2><div id="lgBiblioteca" class="lbl"></div></div><button id="lgCerrar" class="mn-btn is-sm" type="button" aria-label="Cerrar">×</button></div>
+  <div class="mn-dialog-body">
+    <div class="dlg-avisos" role="status" aria-live="polite"></div>
+    <p id="lgNota" class="nota-lectura oculto"></p>
+    <div class="dos">
+      <div class="mn-field"><label for="lgTexto">Buscar por nombre</label><input id="lgTexto" autocomplete="off" placeholder="plan de contingencia"></div>
+      <div class="mn-field"><label for="lgTarea">Tarjeta (opcional)</label><select id="lgTarea"></select></div>
+    </div>
+    <div class="lg-acciones"><button id="lgBuscar" class="mn-btn is-sm" type="button">Buscar</button></div>
+    <div id="lgResultados" class="lg-resultados"></div>
+  </div>
+</dialog>
+
+<dialog id="dlgEnlace" class="mn-dialog dlg-erp" aria-labelledby="enCab">
+  <form id="formEnlace" novalidate>
+    <div class="mn-dialog-head"><div><h2 id="enCab">Pegar un enlace</h2><div id="enProyecto" class="lbl"></div></div></div>
+    <div class="mn-dialog-body">
+      <div class="dlg-avisos" role="status" aria-live="polite"></div>
+      <div class="mn-field"><label for="enTitulo">Qué es</label><input id="enTitulo" maxlength="255" autocomplete="off" placeholder="Oficio de la autoridad (correo del gestor)"></div>
+      <div class="mn-field"><label for="enUrl">Dirección (https://…)</label><input id="enUrl" type="url" inputmode="url" placeholder="https://minsaenergy.sharepoint.com/…"></div>
+      <div class="mn-field"><label for="enTarea">Tarjeta (opcional)</label><select id="enTarea"></select></div>
+      <p class="nota-lectura">Para lo que no vive en la biblioteca de la unidad: un correo, un oficio en Legal o Finanzas, una página. Se guarda la liga, no el archivo.</p>
+    </div>
+    <div class="mn-dialog-foot"><button id="enCancelar" class="mn-btn" type="button">Cancelar</button><button id="enGuardar" class="mn-btn is-primary" type="submit">Guardar enlace</button></div>
+  </form>
+</dialog>
+
+<!-- Confirmacion propia (comun.js confirmar; la de Proyectos) -->
+<dialog id="dlg" class="mn-dialog dlg-erp" aria-labelledby="dlgTitulo">
+  <div class="mn-dialog-head"><h2 id="dlgTitulo"></h2></div>
+  <div class="mn-dialog-body"><p id="dlgTexto"></p><div class="mn-field oculto" id="dlgMotivoCampo"><label for="dlgMotivo" id="dlgMotivoEtiqueta">Motivo</label><input id="dlgMotivo"><p class="oculto" id="dlgError">El motivo es obligatorio.</p></div></div>
+  <div class="mn-dialog-foot"><button class="mn-btn" id="dlgCancelar" type="button">Cancelar</button><button class="mn-btn is-primary" id="dlgOk" type="button">Confirmar</button></div>
 </dialog>
 
 <script src="./vendor/msal-browser.min.js" integrity="sha256-px+JPcPJ+jxZIZ4FNatqAKYoGGDyQxWrgRgwS6r6zGQ="></script>

@@ -7,12 +7,17 @@
 //     se avisa y la ficha (si estaba abierta) se repinta con lo nuevo.
 //   - La bitacora PROY_Actividad recibe los MISMOS renglones que escribe Proyectos (crear-tarea · mover-tarea · editar-tarea ·
 //     borrar-tarea, con su misma frase), DESPUES de la escritura y best-effort (registrarActividad de comun.js).
+// v0.5.0: la ficha suma lo que le faltaba de la de Proyectos — DESCRIPCION (editable, viaja en el mismo PATCH), DOCUMENTOS de
+// la tarjeta (sus ligas, quitar, y Subir / Ligar / Enlace con la tarjeta ya puesta: archivos.js) y NOTAS (Accion=comentar en
+// PROY_Actividad, el mismo renglon que escribe Proyectos; aqui la escritura ES la accion, asi que si falla se ve).
 // Nada de innerHTML: el() / textContent.
 
-import { PUEDE, columnasDe, tareasDe, nombreDe, nombreColumnaEn, camposDeMovimiento, sellarAsignadoPor, HECHO } from './reglas.js';
-import { $, L, estado, boton, avisar, abrirDialogo, cerrarDialogo, opciones, limpiar, porId, aIsoDia, diaInput, fechaInput,
-    campoFecha, registrarActividad, aplicarVivo, agregarSinDuplicar, pedirRelectura, personasActivas, mayusculasEnVivo } from './comun.js';
+import { PUEDE, columnasDe, tareasDe, nombreDe, nombreCorto, nombreColumnaEn, camposDeMovimiento, sellarAsignadoPor, HECHO } from './reglas.js';
+import { $, L, estado, el, boton, avisar, abrirDialogo, cerrarDialogo, opciones, limpiar, porId, aIsoDia, diaInput, fechaInput,
+    campoFecha, registrarActividad, aplicarVivo, agregarSinDuplicar, pedirRelectura, personasActivas, mayusculasEnVivo,
+    notasDe, fusionarActividad, asegurarActividadDe, fechaHora } from './comun.js';
 import { esConflicto } from './graph.js';
+import { filaLiga, botonesAlta, puedeLigarEn, puedeEnlazarEn } from './archivos.js';
 
 let alCambiar = () => {};
 /** app.js pasa aqui su repintado (contador del rail + pantalla). */
@@ -129,6 +134,8 @@ function cambiosFicha(t) {
     if (pr !== (t.Prioridad || 'normal')) c.Prioridad = pr;
     const v = aIsoDia($('fVence').value);
     if (diaInput(v) !== diaInput(t.Vence)) c.Vence = v;
+    const d = $('fDesc').value.trim();   // v0.5.0: vacia = null (borra la celda), como Proyectos
+    if (d !== String(t.Descripcion || '').trim()) c.Descripcion = d || null;
     return c;
 }
 function revisarFicha() {
@@ -151,7 +158,8 @@ function pintarFicha(t) {
     $('fAsignado').value = String(t.Asignado || '').toLowerCase();
     $('fVence').value = fechaInput(t.Vence);
     $('fPrioridad').value = t.Prioridad || 'normal';
-    for (const id of ['fTitulo', 'fAsignado', 'fVence', 'fPrioridad']) $(id).disabled = !edita;
+    $('fDesc').value = t.Descripcion || '';
+    for (const id of ['fTitulo', 'fAsignado', 'fVence', 'fPrioridad', 'fDesc']) $(id).disabled = !edita;
     for (const b of document.querySelectorAll('#formFicha .fecha-cal')) b.disabled = !edita;
     $('fGuardar').classList.toggle('oculto', !edita);
     $('fSoloLectura').classList.toggle('oculto', edita);
@@ -169,12 +177,71 @@ function pintarFicha(t) {
     const puedeBorrar = PUEDE.borrar(estado.rol) && activo;
     $('fBorrar').classList.toggle('oculto', !puedeBorrar);
     $('fBorrar').textContent = 'Borrar tarjeta'; delete $('fBorrar').dataset.armado;
+    pintarDocsFicha(t, p);
+    pintarNotas(t, p);
     revisarFicha();
+}
+/** v0.5.0: los documentos de la tarjeta (sus ligas de PROY_Ligas) y los botones de alta con la tarjeta ya puesta; al terminar
+ *  o cancelar el dialogo de alta, la ficha se vuelve a abrir (alTerminar). */
+function pintarDocsFicha(t, p) {
+    const c = $('fDocs'); c.textContent = '';
+    const ligas = estado.ligas.filter(l => Number(l.TareaId) === t.id).sort((a, b) => String(b._creado || '').localeCompare(String(a._creado || '')) || b.id - a.id);
+    $('fDocsN').textContent = ligas.length ? String(ligas.length) : '';
+    for (const l of ligas) c.appendChild(filaLiga(l, { puede: l.Tipo === 'enlace' ? puedeEnlazarEn(p) : puedeLigarEn(p), conTarjeta: false }));
+    if (!ligas.length) c.appendChild(el('p', 'vacio', 'Sin documentos todavía.'));
+    const a = $('fDocsAltas'); a.textContent = '';
+    if (p) a.appendChild(botonesAlta(p, { tareaId: t.id, alTerminar: () => abrirFicha(t.id), compacto: true }));
+}
+/** v0.5.0: las notas de la tarjeta (Accion=comentar), de la mas vieja a la mas nueva, y el campo para anotar si el rol edita. */
+function pintarNotas(t, p) {
+    const c = $('fNotas'); c.textContent = '';
+    const notas = notasDe(t.id);
+    $('fNotasN').textContent = notas.length ? String(notas.length) : '';
+    for (const n of notas) {
+        const it = el('div', 'nota'); it.dataset.nota = String(n.id);
+        const cab = el('div', 'nota-cab'); cab.appendChild(el('b', '', nombreCorto(n.Quien, estado.roles))); cab.appendChild(el('span', 'muted', fechaHora(n.Cuando)));
+        it.appendChild(cab); it.appendChild(el('div', 'nota-texto', n.Title || ''));
+        c.appendChild(it);
+    }
+    if (!notas.length) c.appendChild(el('p', 'vacio', 'Sin notas todavía.'));
+    const anota = PUEDE.tarea(estado.rol) && !!p && p.Estado === 'activo';
+    $('fAnotarCaja').classList.toggle('oculto', !anota);
+}
+/** Repinta SOLO documentos y notas de la ficha abierta (tras una liga, un quitar o una relectura) sin tocar lo que se edita. */
+export function refrescarFicha() {
+    if (!$('dlgFicha').open || fichaId == null) return;
+    const t = porId(estado.tareas, fichaId); if (!t) return;
+    const p = porId(estado.proyectos, t.ProyectoId);
+    pintarDocsFicha(t, p); pintarNotas(t, p);
 }
 export function abrirFicha(id) {
     const t = porId(estado.tareas, id); if (!t) return;
+    $('fNota').value = '';   // C-04 de Proyectos: la nota se vacia al ABRIR, no en cada repintado
     pintarFicha(t);
     abrirDialogo('dlgFicha');
+    // La carga trae la bitacora acotada; las notas viejas de este proyecto se completan una vez por carga.
+    asegurarActividadDe(t.ProyectoId).then(trajo => { if (trajo) refrescarFicha(); });
+}
+async function anotar() {
+    const t = porId(estado.tareas, fichaId); if (!t) return;
+    if (!PUEDE.tarea(estado.rol)) { avisar('Tu rol es de lectura: no puedes anotar.', 'error'); return; }
+    const p = porId(estado.proyectos, t.ProyectoId);
+    if (!p || p.Estado !== 'activo') { avisar('El proyecto está cerrado.', 'error'); return; }
+    if ($('fAnotar').disabled) return;
+    const texto = $('fNota').value.trim();
+    if (!texto) { $('fNota').focus(); return; }
+    if (texto.length > 250) { avisar('La nota no cabe: máximo 250 caracteres (es un renglón de la bitácora).', 'error'); return; }
+    $('fAnotar').disabled = true;
+    try {
+        const r = { Title: texto, Accion: 'comentar', Quien: estado.cuenta.username, Cuando: new Date().toISOString(), ProyectoId: Number(t.ProyectoId), TareaId: t.id };
+        const n = await estado.cliente.crearRenglon(estado.siteId, L.actividad, r, m => avisar(m, 'ojo'));
+        fusionarActividad([n]);
+        $('fNota').value = '';
+        pintarNotas(t, p);
+        avisar('Nota guardada.', 'ok');
+        alCambiar();
+    } catch (e) { avisar('No se pudo guardar la nota: ' + motivo(e), 'error'); }
+    finally { $('fAnotar').disabled = false; }
 }
 async function guardarFicha(ev) {
     if (ev) ev.preventDefault();
@@ -211,11 +278,11 @@ async function borrarTarea() {
     try {
         await estado.cliente.borrarRenglon(estado.siteId, L.tareas, t.id, m => avisar(m, 'ojo'));
         estado.tareas = estado.tareas.filter(x => x.id !== t.id);
-        // Como Proyectos: las ligas de la tarjeta se quedan en el proyecto, ya sin tarjeta (best-effort; el ERP no las tiene
-        // en memoria, asi que se leen aqui).
+        // Como Proyectos: las ligas de la tarjeta se quedan en el proyecto, ya sin tarjeta (best-effort). Se leen frescas (otra
+        // persona pudo ligar algo desde la ultima carga) y el cambio se refleja tambien en memoria (v0.5.0: el ERP ya las pinta).
         try {
             const ligas = await estado.cliente.renglones(estado.siteId, L.ligas);
-            for (const l of ligas) if (Number(l.TareaId) === t.id) { try { await estado.cliente.actualizarRenglon(estado.siteId, L.ligas, l.id, { TareaId: null }, undefined, l._etag); } catch (_) { /* se queda colgada */ } }
+            for (const l of ligas) if (Number(l.TareaId) === t.id) { try { const res = await estado.cliente.actualizarRenglon(estado.siteId, L.ligas, l.id, { TareaId: null }, undefined, l._etag); aplicarVivo(estado.ligas, l.id, { TareaId: null }, res && res._etag); } catch (_) { /* se queda colgada */ } }
         } catch (_) { /* sin ligas que soltar */ }
         cerrarDialogo('dlgFicha');
         alCambiar();
@@ -250,7 +317,9 @@ export function engancharTarjetas() {
     $('ntCancelar').addEventListener('click', () => cerrarDialogo('dlgNueva'));
     $('ntCerrar').addEventListener('click', () => cerrarDialogo('dlgNueva'));
     $('formFicha').addEventListener('submit', guardarFicha);
-    for (const id of ['fTitulo', 'fVence']) $(id).addEventListener('input', revisarFicha);
+    for (const id of ['fTitulo', 'fVence', 'fDesc']) $(id).addEventListener('input', revisarFicha);
+    $('fAnotar').addEventListener('click', anotar);
+    $('fNota').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); anotar(); } });
     for (const id of ['fAsignado', 'fPrioridad']) $(id).addEventListener('change', revisarFicha);
     $('fCerrar').addEventListener('click', () => cerrarDialogo('dlgFicha'));
     $('fBorrar').addEventListener('click', borrarTarea);

@@ -225,8 +225,6 @@ body { margin: 0; background: var(--surface-page); color: var(--text-body); font
 /* en construccion */
 .construccion { align-items: flex-start; max-width: 720px; }
 .construccion p { margin: 0; }
-.construccion .personas { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; width: 100%; }
-.construccion .personas li { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line-soft); padding: 6px 0; }
 @media (max-width: 1100px) { .rejilla-proyectos { grid-template-columns: minmax(0, 1fr); } }
 /* celular: pestañas abajo (5 destinos); lo de «Después» y el pie del rail se ocultan; la barra de arriba trae el tema */
 @media (max-width: 720px) {
@@ -287,3 +285,89 @@ button.kc:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; 
 .dlg-erp .fecha-cal { min-height: var(--control-h); min-width: 44px; display: inline-flex; align-items: center; justify-content: center; }
 .dlg-erp .fecha-cal svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .dlg-erp .mover-caja > .lbl { font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; font-weight: 600; color: var(--text-muted); }
+
+/* ==== v0.5.0 — Archivos, Documentos del proyecto, Equipo y la ficha con descripcion, documentos y notas ==== */
+.oculto-visual { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* Icono de archivo (iconoArchivo de comun.js): copiado LITERAL de minsa-proyectos-app/app/estilo.css v0.160.0 (hoja solida v0.27.0). */
+.fico { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 38px; flex: none; color: var(--idle-solid); }
+.fico svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.fico svg .cuerpo { fill: currentColor; }
+.fico svg .doblez { fill: color-mix(in srgb, currentColor 55%, var(--sobre-solido)); stroke: none; }
+.fico svg .marca { stroke: var(--sobre-solido); stroke-width: 1.7; }
+.fico.is-sm { width: 22px; height: 22px; } .fico.is-sm svg { width: 20px; height: 20px; stroke-width: 2; }
+.fico.is-pdf { color: var(--bad-solid); } .fico.is-word { color: var(--brand); } .fico.is-excel { color: var(--ok-solid); } .fico.is-ppt { color: var(--serie); }
+.fico.is-imagen { color: var(--serie2); } .fico.is-correo { color: var(--info-solid); } .fico.is-plano { color: var(--sky-700); } .fico.is-zip { color: var(--amber-700); }
+.fico.is-lote { color: var(--info-solid); } .fico.is-enlace { color: var(--text-muted); }
+.fico svg .letras { fill: var(--sobre-solido); stroke: none; font-family: var(--font-display); font-weight: 700; font-size: 6px; text-anchor: middle; letter-spacing: .02em; }
+.fico.is-sm svg .marca { stroke-width: 2; }
+/* pestañas del proyecto (maqueta: Tablero · Documentos que faltan) */
+.tabs-proyecto { display: flex; gap: 24px; border-bottom: 1px solid var(--line-soft); overflow-x: auto; }
+.tabs-proyecto .tab { display: inline-flex; align-items: center; gap: 8px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--text-muted); font: 600 15px var(--font-ui); padding: 10px 0; margin-bottom: -1px; cursor: pointer; white-space: nowrap; }
+.tabs-proyecto .tab.is-on { color: var(--brand); border-bottom-color: var(--brand); }
+.tabs-proyecto .tab:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+/* barra de alta y «qué documentos faltan» */
+.docs-barra { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.docs-barra p, .nota-archivos, .adopcion p, .faltan > p { margin: 0; font-size: 14px; max-width: 760px; }
+.altas { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn.incompleto.is-sm { min-height: 32px; font-size: 13px; padding: 0 10px; }
+.falta, .falta-proy { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line-soft); }
+.falta-cuerpo { min-width: 0; flex: 1 1 260px; display: flex; flex-direction: column; gap: 4px; }
+.falta .titulo { color: var(--text-strong); font-weight: 500; overflow-wrap: anywhere; }
+.enlace-tarjeta, .enlace-proyecto { border: 0; background: none; padding: 0; font: inherit; color: var(--text-strong); text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.enlace-tarjeta:hover, .enlace-proyecto:hover { color: var(--brand); text-decoration: underline; }
+.falta-proy .nombre { color: var(--text-strong); font-weight: 500; flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+/* lista de documentos (pestaña Documentos, #archivos y la ficha) */
+.grupo-docs { display: flex; flex-direction: column; margin-top: 8px; }
+.grupo-docs .sec { font: 600 11px var(--font-ui); letter-spacing: .09em; text-transform: uppercase; padding: 6px 0 8px; border-bottom: 1px solid var(--line-soft); display: flex; gap: 10px; align-items: center; color: var(--text-muted); }
+.grupo-docs .sec .enlace-proyecto { font: 600 12px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: var(--brand); }
+.doc { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+.doc:last-child { border-bottom: 0; }
+.doc-cuerpo { min-width: 0; }
+.doc-nombre { color: var(--text-strong); font-weight: 500; overflow-wrap: anywhere; }
+.doc-nombre a { color: inherit; text-decoration: none; }
+.doc-nombre a:hover { color: var(--brand); text-decoration: underline; }
+.doc-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; font-size: 13px; margin-top: 2px; min-width: 0; }
+.doc-meta > * { min-width: 0; overflow-wrap: anywhere; }
+.tarjeta-de { color: var(--text-body); font-weight: 500; }
+.doc .estado { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; align-items: center; }
+/* filtros de #archivos */
+.filtros-archivos { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.filtros-archivos select, .filtros-archivos input { min-height: 40px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text-strong); font: 500 14px var(--font-ui); padding: 0 10px; max-width: 100%; }
+.filtros-archivos input { flex: 1 1 220px; min-width: 0; }
+.filtros-archivos .tipos { display: flex; flex-wrap: wrap; gap: 6px; }
+.filtros-archivos .tipos button { min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); color: var(--text-muted); font: 600 13px var(--font-ui); cursor: pointer; }
+.filtros-archivos .tipos button.is-on { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+/* Equipo */
+.tabla-equipo { display: flex; flex-direction: column; }
+.fila-eq { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr); gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line-soft); }
+.fila-eq:last-child { border-bottom: 0; }
+.fila-eq.cab { padding-top: 0; }
+.fila-eq .persona { color: var(--text-strong); font-weight: 500; overflow-wrap: anywhere; }
+.fila-eq .abiertos b { font: 600 17px var(--font-display); color: var(--text-strong); }
+.fila-eq .uso { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; }
+/* ficha: documentos y notas */
+.dlg-erp .ficha-sec { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 8px; }
+.dlg-erp .ficha-sec > .lbl { font: 600 11px var(--font-ui); letter-spacing: .09em; text-transform: uppercase; color: var(--text-muted); }
+.dlg-erp .ficha-sec .n { color: var(--brand); margin-left: 4px; }
+.dlg-erp .doc { grid-template-columns: auto minmax(0, 1fr); }
+.dlg-erp .doc .estado, .dlg-erp .doc .quitar { grid-column: 2; justify-self: start; }
+.notas .nota { border-left: 3px solid var(--line); padding: 4px 0 4px 10px; margin-bottom: 8px; }
+.nota-cab { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--text-strong); }
+.nota-texto { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-body); font-size: 14px; }
+.anotar { display: flex; gap: 8px; align-items: flex-end; }
+.anotar textarea { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text-strong); font: 400 14px var(--font-ui); padding: 8px 10px; resize: vertical; }
+.lg-acciones { margin-top: 10px; }
+.lg-resultado { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line-soft); }
+.lg-cuerpo { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+.lg-nombre { color: var(--text-strong); font-weight: 500; }
+.dlg-erp .progreso { font: 500 13px var(--font-ui); color: var(--text-muted); margin: 8px 0 0; }
+.dlg-erp .progreso:empty { display: none; }
+@media (max-width: 720px) {
+  .doc { grid-template-columns: auto minmax(0, 1fr); }
+  .doc .estado, .doc .quitar { grid-column: 2; justify-self: start; }
+  .fila-eq.cab { display: none; }
+  .fila-eq { grid-template-columns: minmax(0, 1fr) auto; row-gap: 6px; }
+  .fila-eq .persona { grid-column: 1 / -1; }
+  .fila-eq .uso { grid-column: 1 / -1; }
+  .tabs-proyecto { gap: 18px; }
+}

@@ -8,6 +8,9 @@
      (v0.160.0, lineas 35-256); los escenarios de abajo son los de v0.2.0 (armazon, Inicio · Mis pendientes, Proyectos, el kanban y las «en construcción») y,
      desde v0.3.0, las ESCRITURAS del kanban portadas de los escenarios de tablero de Proyectos: crear, mover (ficha y arrastre),
      editar, el 412 con relectura, borrar (solo gerencia) y el rol lectura sin ninguna escritura.
+     v0.5.0: Archivos (#archivos y la pestaña Documentos del proyecto: «qué documentos faltan», subir al buzón, ligar,
+     pegar enlace, quitar, el chip «ya lo acomodó la skill»), Equipo («Escribió en la app») y la ficha con descripción,
+     documentos y notas, para los 3 roles (lectura: lo ve todo, no escribe nada ni forzando).
      Los ~2,800 renglones de escenarios de Proyectos prueban sus VISTAS (tablero, docs, chat, capital...), que no se
      trajeron; vuelven por pantalla en la fase 4. Sin CSP a proposito (herramienta de desarrollo, _config.yml la
      excluye de Pages). Se corre desde app/ con `npm run test:e2e` (PowerShell + Edge headless, 3 roles). -->
@@ -280,10 +283,10 @@ try {
     const pit = P({ Title: 'Servicio PITEPEC', Clave: 'pitepec-demo', Equipo: 'PITEPEC', Estado: 'activo', Columnas: JSON.stringify([{ clave: 'pendiente', nombre: 'Pendiente' }, { clave: 'haciendo', nombre: 'Haciendo' }, { clave: 'hecho', nombre: 'Listo' }]) });
     P({ Title: 'Frente viejo', Clave: 'viejo-demo', Equipo: 'RABASA', Estado: 'cerrado' });
     const XSS = '<img src=x onerror="window.__xss=1">Tarea con etiqueta';
-    const T = (Title, ProyectoId, Columna, Asignado, Vence, extra = {}) => DB.listas.tareas.items.push({ id: DB.siguienteId++, fields: { Title, ProyectoId, Columna, Asignado, ...(Vence !== null ? { Vence } : {}), Prioridad: 'normal', ...extra } });
-    T('Vencida mía', lau, 'por-hacer', yo, dia(-3), { Prioridad: 'alta' });
-    T('Para hoy mía', lau, 'en-curso', yo, dia(0));
-    T('Esta semana mía', lau, 'por-hacer', yo, dia(4));
+    const T = (Title, ProyectoId, Columna, Asignado, Vence, extra = {}) => { const id = DB.siguienteId++; DB.listas.tareas.items.push({ id, fields: { Title, ProyectoId, Columna, Asignado, ...(Vence !== null ? { Vence } : {}), Prioridad: 'normal', ...extra } }); return id; };
+    const tVencida = T('Vencida mía', lau, 'por-hacer', yo, dia(-3), { Prioridad: 'alta' });
+    const tHoy = T('Para hoy mía', lau, 'en-curso', yo, dia(0));
+    const tSemana = T('Esta semana mía', lau, 'por-hacer', yo, dia(4));
     T('Más adelante mía', lau, 'en-revision', yo, dia(30));
     T('Sin fecha mía', lau, 'por-hacer', yo, null);
     T(XSS, lau, 'por-hacer', yo, null);
@@ -293,6 +296,18 @@ try {
     T('En cubeta borrada', lau, 'cubeta-que-ya-no-existe', yo, null);
     T('Haciendo PITEPEC', pit, 'haciendo', yo, dia(2));
     T('Listo PITEPEC', pit, 'hecho', 'colega@example.invalid', null);
+    // v0.5.0: ligas (PROY_Ligas) para Archivos y Documentos del proyecto, y bitacora (PROY_Actividad) para Equipo y las notas.
+    const LG = fields => { const id = DB.siguienteId++; DB.listas.ligas.items.push({ id, fields, creado: '2026-09-20T18:00:00Z' }); return id; };
+    const lgArch = LG({ Title: '2025-06-20_MINSA_plan-contingencia_rev01.pdf', ProyectoId: lau, TareaId: tVencida, Tipo: 'archivado', Unidad: 'CALYTEK', Ruta: '04_SGI/02_Ambiental/2025-06-20_MINSA_plan-contingencia_rev01.pdf', Url: 'https://minsaenergy.sharepoint.com/sites/Ambiental-CALYTEK/Shared%20Documents/plan.pdf', DriveItemId: 'archivo-a1', LigadoPor: 'colega@example.invalid' });
+    const lgEnlace = LG({ Title: 'Oficio ASEA (correo del gestor)', ProyectoId: lau, Tipo: 'enlace', Url: 'https://outlook.office.com/mail/id/abc', LigadoPor: yo });
+    const lgBuzon = LG({ Title: 'Fotos de la visita', ProyectoId: lau, Tipo: 'buzon', Unidad: 'CALYTEK', Ruta: '99_Pendiente-Archivar/2026-09-01_algo', DriveItemId: 'carpeta-vieja', LigadoPor: 'colega@example.invalid' });
+    const lgFuera = LG({ Title: 'Liga editada a mano.pdf', ProyectoId: lau, TareaId: tHoy, Tipo: 'archivado', Unidad: 'CALYTEK', Ruta: '04_SGI/x.pdf', Url: 'https://evil.example.com/x.pdf', DriveItemId: 'archivo-x', LigadoPor: 'jefa@example.invalid' });
+    const XSS_LIGA = '<img src=x onerror="window.__xss2=1">Liga con etiqueta';
+    LG({ Title: XSS_LIGA, ProyectoId: pit, Tipo: 'enlace', Url: 'https://example.com/a', LigadoPor: 'colega@example.invalid' });
+    const AC = (Quien, Cuando, Accion, Title, extra = {}) => DB.listas.actividad.items.push({ id: DB.siguienteId++, fields: { Title, Accion, Quien, Cuando, ...extra } });
+    AC('colega@example.invalid', dia(-2), 'reabrir-proyecto', 'reabrió el proyecto «LAU CALYTEK»', { ProyectoId: lau });   // una accion que ningun escenario cuenta
+    AC('colega@example.invalid', dia(-1), 'comentar', 'Nota sembrada en esta semana', { ProyectoId: lau, TareaId: tSemana });
+    AC('jefa@example.invalid', dia(-200), 'crear-proyecto', 'creó el proyecto «LAU CALYTEK»', { ProyectoId: lau });   // fuera de la ventana de 90 dias
     // Con rol lectura se prueba ademas que PROY_Capital ausente no estorba (v0.2.0 ya no la lee).
     if (ROL === 'lectura') delete DB.listas.capital;
 
@@ -301,7 +316,7 @@ try {
     await esperar(() => !$('pantallaSesion').classList.contains('oculto'), 'pantalla de sesion', 15000);
     await esperar(() => pantalla(), 'primera pantalla');
     R.ok('entra con MSAL y oculta la entrada', $('pantallaEntrar').classList.contains('oculto'));
-    R.ok('pie con la version', $('pie').textContent === 'MINSA ERP v0.4.0', $('pie').textContent);
+    R.ok('pie con la version', $('pie').textContent === 'MINSA ERP v0.5.0', $('pie').textContent);
     R.ok('celular: «···» lleva Tema y Salir', !!document.querySelector('#masMovil #temaMovil') && !!document.querySelector('#masMovil #btnSalirMovil'));
     R.ok('nombre de PROY_Roles, no el correo', $('quien').textContent === 'Persona de Prueba', $('quien').textContent);
     R.ok('rol leido de PROY_Roles', $('rolQuien').textContent === ROL, $('rolQuien').textContent);
@@ -358,12 +373,68 @@ try {
     await irA('#p/nadie', 'proyecto');
     R.ok('una clave que no existe lo dice', /No encontré ese proyecto/.test(vista().textContent));
 
-    // 8. Las «en construcción» son honestas
-    for (const [h, palabra] of [['#archivos', 'Archivos'], ['#gastos', 'Gastos'], ['#equipo', 'Equipo']]) {
-        await irA(h, h.slice(1));
-        R.ok(`${palabra}: en construcción, con lo que falta`, vista().querySelector('h1').textContent === palabra && /en construcción/.test($('enConstruccion').textContent) && !!$('enConstruccion').querySelector('.btn.incompleto[disabled]'));
+    // 8. La «en construcción» que queda (Gastos, fase 5) es honesta
+    await irA('#gastos', 'gastos');
+    R.ok('Gastos: en construcción, con lo que falta', vista().querySelector('h1').textContent === 'Gastos' && /en construcción/.test($('enConstruccion').textContent) && !!$('enConstruccion').querySelector('.btn.incompleto[disabled]'));
+    const ESCRIBE = ROL !== 'lectura';
+    const filasDoc = sel => [...document.querySelectorAll(sel + ' .doc')];
+    const ponerTexto = (id, v) => { const i = $(id); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); };
+
+    // 8.1 v0.5.0 — #archivos: todo lo que sube el equipo (lectura para los 3 roles)
+    await irA('#archivos', 'archivos');
+    R.ok('Archivos: ya no es «en construcción»', vista().querySelector('h1').textContent === 'Archivos' && !$('enConstruccion'));
+    R.ok('Archivos: lee PROY_Ligas y PROY_Actividad (acotada por Cuando)', DB.llamadas.some(c => c.includes('/lists/lista-ligas/items')) && DB.filtros.some(f => /^fields\/Cuando ge '/.test(f)), DB.filtros.join(' | '));
+    R.ok('Archivos: las 5 ligas, agrupadas por proyecto', filasDoc('#archivosLista').length === 5 && textos('#archivosLista .grupo-docs .sec .enlace-proyecto').join('|') === 'LAU CALYTEK|Servicio PITEPEC', `${filasDoc('#archivosLista').length} · ${textos('#archivosLista .grupo-docs .sec .enlace-proyecto').join('|')}`);
+    R.ok('Archivos: el subtítulo cuenta los documentos', $('archivosSub').textContent === '5 documentos ligados en todos los frentes', $('archivosSub').textContent);
+    R.ok('Archivos: un título con HTML se pinta como texto', vista().textContent.includes(XSS_LIGA) && !vista().querySelector('img') && !window.__xss2);
+    R.ok('Archivos: estados archivado · en el buzón · enlace · dirección externa', ['archivado', 'en el buzón', 'enlace', 'dirección externa'].every(e => textos('#archivosLista .estado .mn-chip').includes(e)), textos('#archivosLista .estado .mn-chip').join(','));
+    R.ok('Archivos: una Url fuera de SharePoint no se abre (sin <a>)', !document.querySelector(`#archivosLista [data-liga="${lgFuera}"] a`) && !!document.querySelector(`#archivosLista [data-liga="${lgArch}"] a[href^="https://minsaenergy.sharepoint.com/"][rel~="noopener"]`));
+    R.ok('Archivos: «dónde quedó» nombra biblioteca y carpeta', document.querySelector(`#archivosLista [data-liga="${lgArch}"] .donde`)?.textContent === 'Ambiental-CALYTEK › 04_SGI/02_Ambiental', document.querySelector(`#archivosLista [data-liga="${lgArch}"] .donde`)?.textContent);
+    R.ok('Archivos: aquí no se quita (como #archivos de Proyectos)', !document.querySelector('#archivosLista .quitar'));
+    const faltaProy = id => document.querySelector(`#archivosFaltan [data-proyecto="${id}"]`)?.textContent || '';
+    R.ok('Archivos: qué documentos faltan, por proyecto activo', /7 tarjetas abiertas sin documentos/.test(faltaProy(lau)) && /1 tarjeta abierta sin documentos/.test(faltaProy(pit)) && $('archivosFaltan').querySelector('.card-cab .mn-chip').textContent === '8', `${faltaProy(lau)} | ${faltaProy(pit)}`);
+    document.querySelector('#archivosTipo [data-tipo="enlace"]').click();
+    R.ok('Archivos: filtro por tipo (enlace)', filasDoc('#archivosLista').length === 2 && $('archivosSub').textContent === '2 de 5 documentos', $('archivosSub').textContent);
+    document.querySelector('#archivosTipo [data-tipo="todos"]').click();
+    ponerTexto('archivosTexto', 'contingencia');
+    R.ok('Archivos: buscar por nombre conserva el foco del campo', filasDoc('#archivosLista').length === 1 && !!document.querySelector(`#archivosLista [data-liga="${lgArch}"]`) && document.body.contains($('archivosTexto')), String(filasDoc('#archivosLista').length));
+    ponerTexto('archivosTexto', '');
+    if (ESCRIBE) R.ok('Archivos: «Subir» vivo para quien escribe', !$('btnSubirArchivos').disabled && !$('btnSubirArchivos').classList.contains('incompleto'));
+    else R.ok('Archivos (lectura): «Subir» dice por qué no', $('btnSubirArchivos').disabled && $('btnSubirArchivos').textContent === 'Subir: tu rol es de lectura', $('btnSubirArchivos').textContent);
+    document.querySelector(`#archivosFaltan [data-ir-docs="lau-demo"]`).click();
+    await esperar(() => pantalla() === 'proyecto' && vista().dataset.tab === 'docs', 'de Archivos a Documentos del proyecto');
+    R.ok('Archivos → #p/<clave>/docs (el hash de Proyectos)', location.hash === '#p/lau-demo/docs', location.hash);
+
+    // 8.2 v0.5.0 — Proyecto · Documentos: qué falta, los ligados y el buzón en vivo
+    const tabDocs = document.querySelector('#tabsProyecto [data-tab="docs"]');
+    R.ok('Documentos: pestaña activa con «faltan 7»', tabDocs.classList.contains('is-on') && tabDocs.getAttribute('aria-selected') === 'true' && tabDocs.querySelector('.mn-chip')?.textContent === 'faltan 7', tabDocs.textContent);
+    R.ok('Documentos: «Qué documentos faltan» lista las 7 tarjetas abiertas sin documento', document.querySelectorAll('#docsFaltan .falta').length === 7 && !document.querySelector(`#docsFaltan [data-falta="${tVencida}"]`) && !document.querySelector(`#docsFaltan [data-falta="${tHoy}"]`), String(document.querySelectorAll('#docsFaltan .falta').length));
+    R.ok('Documentos: ni la hecha ni las de otros proyectos faltan', !textos('#docsFaltan .titulo').some(t => t === 'Hecha mía' || t === 'Haciendo PITEPEC'));
+    R.ok('Documentos: los 4 de LAU agrupados — «Del proyecto» primero', textos('#docsLista .grupo-docs .sec > span:first-child').join('|') === 'Del proyecto|Para hoy mía|Vencida mía', textos('#docsLista .grupo-docs .sec > span:first-child').join('|'));
+    await esperar(() => /ya lo acomodó la skill/.test(document.querySelector(`#docsLista [data-liga="${lgBuzon}"] .estado`)?.textContent || ''), 'el buzón en vivo (404 = ya lo acomodó la skill)');
+    R.ok('Documentos: el lote cuya carpeta ya no está dice «ya lo acomodó la skill»', true);
+    if (ESCRIBE) {
+        R.ok('Documentos: Subir · Ligar · Pegar enlace en la barra y en cada faltante', !!document.querySelector('.docs-barra [data-subir-a="0"]') && !!document.querySelector('.docs-barra [data-ligar-a="0"]') && !!document.querySelector('.docs-barra [data-enlace-a="0"]') && document.querySelectorAll('#docsFaltan [data-subir-a]').length === 7);
+        R.ok('Documentos: «Buscar el archivado» para el lote acomodado', !!document.querySelector(`#docsLista [data-buscar="${lgBuzon}"]`));
+        R.ok('Documentos: «Quitar» en cada liga', document.querySelectorAll('#docsLista .quitar').length === 4);
+    } else {
+        R.ok('Documentos (lectura): un botón que dice por qué no, sin Subir/Ligar/Enlace', !!document.querySelector('.docs-barra [data-no-sube]') && document.querySelector('.docs-barra [data-no-sube]').textContent === 'Subir: tu rol es de lectura' && !document.querySelector('[data-subir-a], [data-ligar-a], [data-enlace-a]'));
+        R.ok('Documentos (lectura): sin «Quitar» ni «Buscar el archivado»', !document.querySelector('#docsLista .quitar') && !document.querySelector('[data-buscar]'));
     }
-    R.ok('Equipo: las personas activas de PROY_Roles', $('enConstruccion').querySelectorAll('.personas li').length === 3);
+    document.querySelector('#tabsProyecto [data-tab="tablero"]').click();
+    await esperar(() => vista().dataset.tab === 'tablero' && $('kanban'), 'de vuelta al tablero');
+    R.ok('pestaña Tablero → #p/<clave>', location.hash === '#p/lau-demo', location.hash);
+
+    // 8.3 v0.5.0 — Equipo: personas, rol, pendientes y «Escribió en la app»
+    await irA('#equipo', 'equipo');
+    const persona = c => document.querySelector(`#equipoLista [data-persona="${c}"]`);
+    R.ok('Equipo: las 3 personas activas de PROY_Roles', document.querySelectorAll('#equipoLista .fila-eq:not(.cab)').length === 3 && !$('enConstruccion'));
+    R.ok('Equipo: rol y pendientes abiertos por persona', persona(yo).querySelector('.rol').textContent === ROL && persona(yo).querySelector('.abiertos').dataset.abiertos === '8' && persona('colega@example.invalid').querySelector('.abiertos').dataset.abiertos === '1', `${persona(yo).querySelector('.abiertos').dataset.abiertos} · ${persona('colega@example.invalid').querySelector('.abiertos').dataset.abiertos}`);
+    R.ok('Equipo: «Escribió en la app» cuenta sus renglones de PROY_Actividad', persona('colega@example.invalid').querySelector('.uso').dataset.escribio === 'si' && /Sí · 2/.test(persona('colega@example.invalid').querySelector('.uso').textContent), persona('colega@example.invalid').querySelector('.uso').textContent);
+    R.ok('Equipo: lo de hace 200 días no cuenta (ventana de 90)', persona('jefa@example.invalid').querySelector('.uso').dataset.escribio === 'no');
+    R.ok('Equipo: quien no ha escrito dice «No»', persona(yo).querySelector('.uso').dataset.escribio === 'no' && persona(yo).querySelector('.uso').textContent === 'No');
+    R.ok('Equipo: el resumen «1 de 3» y la meta del plan', $('equipoAdopcion').querySelector('.mn-chip').textContent === '1 de 3' && /6 de 10/.test($('equipoAdopcion').textContent), $('equipoAdopcion').querySelector('.mn-chip').textContent);
+    R.ok('Equipo: sin avatares ni iniciales', !vista().querySelector('.av'));
     await irA('#cualquier-cosa', 'inicio');
     R.ok('un hash desconocido cae en Inicio', pantalla() === 'inicio');
 
@@ -516,7 +587,8 @@ try {
         R.ok('lectura: la nota del tablero lo dice', /rol es de lectura/.test($('notaTablero').textContent));
         R.ok('lectura: ninguna tarjeta se arrastra', [...document.querySelectorAll('#kanban .kc')].every(c => !c.draggable));
         tarjetaDe('Esta semana mía').click(); await esperar(() => $('dlgFicha').open, 'ficha (lectura)');
-        R.ok('lectura: la ficha abre con todo deshabilitado, sin Guardar, sin Mover ni Borrar', ['fTitulo', 'fAsignado', 'fVence', 'fPrioridad'].every(id => $(id).disabled) && $('fGuardar').classList.contains('oculto') && $('fMoverCaja').classList.contains('oculto') && $('fBorrar').classList.contains('oculto') && !$('fSoloLectura').classList.contains('oculto'));
+        R.ok('lectura: la ficha abre con todo deshabilitado, sin Guardar, sin Mover ni Borrar', ['fTitulo', 'fAsignado', 'fVence', 'fPrioridad', 'fDesc'].every(id => $(id).disabled) && $('fGuardar').classList.contains('oculto') && $('fMoverCaja').classList.contains('oculto') && $('fBorrar').classList.contains('oculto') && !$('fSoloLectura').classList.contains('oculto'));
+        R.ok('lectura: la ficha enseña las notas pero no deja anotar ni subir', !!document.querySelector('#fNotas .nota') && $('fAnotarCaja').classList.contains('oculto') && !!document.querySelector('#fDocsAltas [data-no-sube]') && !document.querySelector('#fDocsAltas [data-subir-a]'));
         $('fTitulo').value = 'Forzado'; $('formFicha').requestSubmit(); await dormir(60);
         R.ok('lectura: forzar Guardar → se niega y lo dice', !!avisoCon('rol es de lectura') && !!tarea('Esta semana mía'), avisoCon('rol es de lectura')?.textContent);
         $('fCerrar').click(); await esperar(() => !$('dlgFicha').open, 'ficha cerrada');
@@ -528,6 +600,136 @@ try {
         TJ.abrirNuevaTarea({ ...lauP.fields, id: lauP.id }); await dormir(30);
         R.ok('lectura: forzar «Nueva tarea» → no abre el diálogo', !$('dlgNueva').open && !!avisoCon('no puedes crear'));
         R.ok('lectura: CERO escrituras en toda la corrida', escrituras().length === 0, escrituras().join(' | '));
+    }
+
+    // 11. v0.5.0: ESCRITURAS de Archivos y de la ficha (subir, ligar, enlace, quitar, notas, descripción) — portadas de los
+    // escenarios de docs.js de Proyectos v0.160.0. Lectura: lo mismo forzado, cero escrituras.
+    for (const d of document.querySelectorAll('dialog[open]')) d.close();
+    const AR = await import('./archivos.js');
+    const ligasDB = () => filas('ligas');
+    const ligaDB = titulo => ligasDB().find(x => x.fields.Title === titulo);
+    const clic = id => $(id).click();
+    if (ESCRIBE) {
+        await irA('#p/lau-demo/docs', 'proyecto');
+        // 11.1 Subir (queda en SharePoint): el boton dice que falta; carpeta -> pieza -> _lote.json al final; liga buzon + bitacora
+        document.querySelector('.docs-barra [data-subir-a="0"]').click(); await esperar(() => $('dlgSubir').open, 'diálogo Subir');
+        R.ok('subir: con proyecto fijo no pide proyecto; el botón dice qué falta', $('sbProyectoCampo').classList.contains('oculto') && $('sbGuardar').disabled && $('sbGuardar').textContent === 'Falta qué es y los archivos', $('sbGuardar').textContent);
+        R.ok('subir: dice a qué biblioteca de SharePoint va', /Ambiental-CALYTEK\/99_Pendiente-Archivar/.test($('sbBiblioteca').textContent), $('sbBiblioteca').textContent);
+        ponerTexto('sbConcepto', 'Informe de campo');
+        R.ok('subir: con concepto y sin archivos lo dice', $('sbGuardar').disabled && $('sbGuardar').textContent === 'Falta los archivos', $('sbGuardar').textContent);
+        { const dt = new DataTransfer(); dt.items.add(new File(['contenido de prueba'], 'informe-campo.pdf', { type: 'application/pdf' })); $('sbArchivos').files = dt.files; $('sbArchivos').dispatchEvent(new Event('change', { bubbles: true })); }
+        poner('sbTarea', String(tSemana));
+        R.ok('subir: completo, el botón dice «Subir»', !$('sbGuardar').disabled && $('sbGuardar').textContent === 'Subir');
+        const nL = ligasDB().length;
+        $('formSubir').requestSubmit();
+        await esperar(() => !$('dlgSubir').open && ligasDB().length === nL + 1, 'lote subido');
+        const lote = ligaDB('Informe de campo');
+        const carpetaLote = DB.carpetas.find(c => c.ruta === lote.fields.Ruta);
+        const piezas = DB.archivos.filter(a => a.ruta.startsWith(lote.fields.Ruta + '/')).map(a => a.nombre);
+        const manif = (() => { try { return JSON.parse(DB.archivos.find(a => a.ruta === lote.fields.Ruta + '/_lote.json').texto); } catch (_) { return null; } })();
+        R.ok('subir: carpeta del lote en el buzón con la pieza y _lote.json', !!carpetaLote && /^99_Pendiente-Archivar\//.test(lote.fields.Ruta) && piezas.join(',') === 'informe-campo.pdf,_lote.json', piezas.join(','));
+        R.ok('subir: el manifiesto lo firma minsa-proyectos (recibo-lote.py) con proyecto, tarea y destino', !!manif && manif.app === 'minsa-proyectos' && manif.proyecto === 'lau-demo' && Number(manif.tarea) === tSemana && manif.archivos.join(',') === 'informe-campo.pdf' && manif.destino === '08_Otros-Varios', JSON.stringify(manif));
+        R.ok('subir: liga buzon en PROY_Ligas (campos de esquema.json)', lote.fields.Tipo === 'buzon' && lote.fields.Unidad === 'CALYTEK' && lote.fields.TareaId === tSemana && lote.fields.ProyectoId === lauP.id && lote.fields.LigadoPor === yo && enEsquema(lote.fields, 'PROY_Ligas').length === 0, JSON.stringify(lote.fields));
+        await esperar(() => actividad('subir').length === 1, 'bitácora subir');
+        R.ok('subir: PROY_Actividad subir con la frase de Proyectos', actividad('subir')[0].fields.Title === 'subió «Informe de campo» al buzón (1 archivo(s))' && actividad('subir')[0].fields.TareaId === tSemana, actividad('subir')[0].fields.Title);
+        await esperar(() => document.querySelector(`#docsLista [data-liga="${lote.id}"]`), 'el lote en la lista');
+        R.ok('subir: la tarjeta deja de faltar y el lote sale «en el buzón»', !document.querySelector(`#docsFaltan [data-falta="${tSemana}"]`) && /en el buzón/.test(document.querySelector(`#docsLista [data-liga="${lote.id}"] .estado`).textContent));
+
+        // 11.2 Subir desde #archivos: elige proyecto (los activos con biblioteca autorizada); y desde un faltante, la tarjeta puesta
+        await irA('#archivos', 'archivos');
+        clic('btnSubirArchivos'); await esperar(() => $('dlgSubir').open, 'Subir desde Archivos');
+        R.ok('subir (Archivos): pide el proyecto, solo los activos con biblioteca autorizada', !$('sbProyectoCampo').classList.contains('oculto') && [...$('sbProyecto').options].map(o => o.textContent).join('|') === 'LAU CALYTEK|Servicio PITEPEC', [...$('sbProyecto').options].map(o => o.textContent).join('|'));
+        poner('sbProyecto', String(pit));
+        R.ok('subir (Archivos): al cambiar de proyecto cambian biblioteca y tarjetas', /Quimicos-PITEPEC/.test($('sbBiblioteca').textContent) && [...$('sbTarea').options].some(o => o.textContent === 'Haciendo PITEPEC'));
+        clic('sbCancelar'); await esperar(() => !$('dlgSubir').open, 'cancelado');
+        await irA('#p/lau-demo/docs', 'proyecto');
+        const tSin = tarea('Sin fecha mía').id;
+        document.querySelector(`#docsFaltan [data-subir-a="${tSin}"]`).click(); await esperar(() => $('dlgSubir').open, 'Subir desde un faltante');
+        R.ok('subir (faltante): la tarjeta ya viene puesta', $('sbTarea').value === String(tSin), $('sbTarea').value);
+        clic('sbCancelar'); await esperar(() => !$('dlgSubir').open, 'cancelado');
+
+        // 11.3 Ligar un archivado: busca fuera del buzón, relee el elemento y escribe la liga + «ligó»
+        document.querySelector('.docs-barra [data-ligar-a="0"]').click(); await esperar(() => $('dlgLigar').open, 'diálogo Ligar');
+        poner('lgTexto', 'matriz-riesgos'); clic('lgBuscar'); await esperar(() => document.querySelector('#lgResultados .lg-resultado'), 'resultados');
+        R.ok('ligar: la búsqueda encuentra el archivado', textos('#lgResultados .lg-nombre').includes('2025-07-01_MINSA_matriz-riesgos_rev02.pdf'), textos('#lgResultados .lg-nombre').join('|'));
+        poner('lgTarea', String(tSin));
+        const nL2 = ligasDB().length;
+        document.querySelector('#lgResultados .lg-resultado button').click();
+        await esperar(() => !$('dlgLigar').open && ligasDB().length === nL2 + 1, 'ligado');
+        const lg2 = ligaDB('2025-07-01_MINSA_matriz-riesgos_rev02.pdf');
+        R.ok('ligar: liga archivado con ruta real, Url de SharePoint y DriveItemId', lg2.fields.Tipo === 'archivado' && lg2.fields.DriveItemId === 'archivo-l2' && lg2.fields.Ruta === '04_SGI/02_Ambiental/2025-07-01_MINSA_matriz-riesgos_rev02.pdf' && /^https:\/\/minsaenergy\.sharepoint\.com\//.test(lg2.fields.Url) && lg2.fields.TareaId === tSin && enEsquema(lg2.fields, 'PROY_Ligas').length === 0 && DB.itemsLeidos.includes('archivo-l2'), JSON.stringify(lg2.fields));
+        await esperar(() => actividad('ligar').length === 1, 'bitácora ligar');
+        R.ok('ligar: PROY_Actividad «ligó «…»»', actividad('ligar')[0].fields.Title === 'ligó «2025-07-01_MINSA_matriz-riesgos_rev02.pdf»', actividad('ligar')[0].fields.Title);
+
+        // 11.4 Pegar un enlace: javascript: no pasa; https sí
+        document.querySelector('.docs-barra [data-enlace-a="0"]').click(); await esperar(() => $('dlgEnlace').open, 'diálogo Enlace');
+        const nPost = escrituras().length;
+        poner('enTitulo', 'Oficio del municipio'); poner('enUrl', 'javascript:alert(1)'); $('formEnlace').requestSubmit(); await dormir(60);
+        R.ok('enlace: javascript: se rechaza sin escribir', $('dlgEnlace').open && escrituras().length === nPost && !!avisoCon('Enlace:'));
+        poner('enUrl', 'https://municipio.example.gob.mx/oficio'); $('formEnlace').requestSubmit();
+        await esperar(() => !$('dlgEnlace').open && ligaDB('Oficio del municipio'), 'enlace guardado');
+        const en = ligaDB('Oficio del municipio');
+        R.ok('enlace: Tipo enlace del proyecto entero, sin Unidad/Ruta', en.fields.Tipo === 'enlace' && en.fields.Url === 'https://municipio.example.gob.mx/oficio' && !('Unidad' in en.fields) && !('TareaId' in en.fields) && enEsquema(en.fields, 'PROY_Ligas').length === 0, JSON.stringify(en.fields));
+        await esperar(() => actividad('ligar').length === 2, 'bitácora enlace');
+        R.ok('enlace: PROY_Actividad «pegó el enlace «…»»', actividad('ligar')[1].fields.Title === 'pegó el enlace «Oficio del municipio»');
+
+        // 11.5 Quitar: confirma, borra el renglon de PROY_Ligas (el archivo no se toca) y deja «desligó»
+        await esperar(() => document.querySelector(`#docsLista [data-quitar="${en.id}"]`), 'el enlace en la lista');
+        document.querySelector(`#docsLista [data-quitar="${en.id}"]`).click(); await esperar(() => $('dlg').open, 'confirmación');
+        R.ok('quitar: pregunta antes, nombrando el documento', /Oficio del municipio/.test($('dlgTexto').textContent));
+        clic('dlgCancelar'); await dormir(40);
+        R.ok('quitar: cancelar no borra', !!ligaDB('Oficio del municipio') && !escrituras().some(c => c.startsWith('DELETE') && c.includes('/lists/lista-ligas/')));
+        document.querySelector(`#docsLista [data-quitar="${en.id}"]`).click(); await esperar(() => $('dlg').open, 'confirmación 2');
+        clic('dlgOk');
+        await esperar(() => !ligaDB('Oficio del municipio') && actividad('desligar').length === 1, 'liga quitada');
+        R.ok('quitar: DELETE en PROY_Ligas y «desligó «…»» en la bitácora', escrituras().some(c => c === `DELETE /sites/sitio-falso/lists/lista-ligas/items/${en.id}`) && actividad('desligar')[0].fields.Title === 'desligó «Oficio del municipio»', actividad('desligar')[0].fields.Title);
+
+        // 11.6 La ficha: documentos de la tarjeta, enlace desde la ficha (vuelve a ella), nota y descripción
+        document.querySelector('#tabsProyecto [data-tab="tablero"]').click(); await esperar(() => $('kanban'), 'tablero');
+        const tColega = tarea('De la colega').id;
+        tarjetaDe('De la colega').click(); await esperar(() => $('dlgFicha').open, 'ficha de la colega');
+        R.ok('ficha: sin documentos lo dice y ofrece Subir · Ligar · Enlace', /Sin documentos todavía/.test($('fDocs').textContent) && !!document.querySelector(`#fDocsAltas [data-subir-a="${tColega}"]`) && !!document.querySelector(`#fDocsAltas [data-enlace-a="${tColega}"]`));
+        document.querySelector(`#fDocsAltas [data-enlace-a="${tColega}"]`).click();
+        await esperar(() => $('dlgEnlace').open && !$('dlgFicha').open, 'la ficha cede el paso al diálogo');
+        R.ok('ficha → enlace: la tarjeta ya viene puesta', $('enTarea').value === String(tColega));
+        poner('enTitulo', 'Correo de la colega'); poner('enUrl', 'https://outlook.office.com/mail/id/xyz'); $('formEnlace').requestSubmit();
+        await esperar(() => !$('dlgEnlace').open && $('dlgFicha').open && document.querySelector('#fDocs .doc'), 'de vuelta a la ficha con el documento');
+        R.ok('ficha → enlace: al guardar vuelve a la ficha y el documento aparece en ella', /Correo de la colega/.test($('fDocs').textContent) && $('fDocsN').textContent === '1' && ligaDB('Correo de la colega').fields.TareaId === tColega);
+        document.querySelector(`#fDocsAltas [data-subir-a="${tColega}"]`).click(); await esperar(() => $('dlgSubir').open && !$('dlgFicha').open, 'Subir desde la ficha');
+        clic('sbCancelar'); await esperar(() => !$('dlgSubir').open && $('dlgFicha').open, 'cancelar vuelve a la ficha');
+        R.ok('ficha → subir: cancelar vuelve a la ficha', $('dlgFicha').open && $('fCab').textContent === 'De la colega');
+        poner('fNota', 'Revisar con el gestor'); clic('fAnotar');
+        await esperar(() => filas('actividad').some(a => a.fields.Accion === 'comentar' && a.fields.TareaId === tColega), 'nota guardada');
+        const nota = filas('actividad').find(a => a.fields.Accion === 'comentar' && a.fields.TareaId === tColega).fields;
+        R.ok('nota: PROY_Actividad comentar con TareaId y ProyectoId (el renglón de Proyectos)', nota.Title === 'Revisar con el gestor' && nota.Quien === yo && nota.ProyectoId === lauP.id && enEsquema(nota, 'PROY_Actividad').length === 0, JSON.stringify(nota));
+        await esperar(() => /Revisar con el gestor/.test($('fNotas').textContent), 'nota pintada');
+        R.ok('nota: aparece en la ficha y el campo se vacía', $('fNota').value === '' && $('fNotasN').textContent === '1');
+        poner('fDesc', 'Descripción editada en el ERP');
+        R.ok('descripción: cambia el botón a «Guardar cambios»', !$('fGuardar').disabled && $('fGuardar').textContent === 'Guardar cambios');
+        $('formFicha').requestSubmit();
+        await esperar(() => tarea('De la colega').fields.Descripcion === 'Descripción editada en el ERP', 'descripción guardada');
+        R.ok('descripción: viaja SOLA en el PATCH (con If-Match)', Object.keys(DB.ultimoPatch.tareas).join(',') === 'Descripcion', Object.keys(DB.ultimoPatch.tareas).join(','));
+        $('fCerrar').click(); await esperar(() => !$('dlgFicha').open, 'ficha cerrada');
+        tarjetaDe('Esta semana mía').click(); await esperar(() => $('dlgFicha').open, 'ficha con nota sembrada');
+        R.ok('ficha: las notas de otros se ven con su autor', /Nota sembrada en esta semana/.test($('fNotas').textContent) && /Colega/.test($('fNotas').textContent) && /Informe de campo/.test($('fDocs').textContent));
+        $('fCerrar').click(); await esperar(() => !$('dlgFicha').open, 'ficha cerrada');
+
+        // 11.7 Equipo tras escribir: quien escribió ya cuenta
+        await irA('#equipo', 'equipo');
+        R.ok('Equipo: tras escribir, «Escribió en la app» = Sí', persona(yo).querySelector('.uso').dataset.escribio === 'si' && $('equipoAdopcion').querySelector('.mn-chip').textContent === '2 de 3', persona(yo).querySelector('.uso').textContent);
+        R.ok('Archivos: ninguna escritura fuera de PROY_Tareas, PROY_Ligas, PROY_Actividad y la biblioteca de CALYTEK', escrituras().every(c => ['tareas', 'actividad', 'ligas'].some(k => c.includes('/lists/lista-' + k + '/')) || c.includes('/sites/sitio-calytek/drive/')), escrituras().filter(c => !['tareas', 'actividad', 'ligas'].some(k => c.includes('/lists/lista-' + k + '/'))).join(' | '));
+        R.ok('Archivos: en la biblioteca solo se escribe dentro del buzón', escrituras().filter(c => c.includes('/sites/sitio-calytek/drive/root:')).every(c => /\/root:\/99_Pendiente-Archivar[/:]/.test(c)), escrituras().filter(c => c.includes('/sites/sitio-calytek/')).join(' | '));
+    } else {
+        // 11.8 Lectura forzando las funciones: nada se abre, nada se escribe
+        AR.abrirSubir({ proyectoId: lauP.id }); await dormir(30);
+        R.ok('lectura: forzar Subir → no abre y lo dice', !$('dlgSubir').open && !!avisoCon('rol es de lectura'));
+        AR.abrirLigar({ proyectoId: lauP.id }); await dormir(30);
+        R.ok('lectura: forzar Ligar → no abre', !$('dlgLigar').open);
+        AR.abrirEnlace({ proyectoId: lauP.id }); await dormir(30);
+        R.ok('lectura: forzar Enlace → no abre', !$('dlgEnlace').open);
+        const quito = await AR.quitarLiga({ ...ligaDB('Oficio ASEA (correo del gestor)').fields, id: lgEnlace });
+        R.ok('lectura: forzar Quitar → se niega sin preguntar', quito === false && !$('dlg').open && !!ligaDB('Oficio ASEA (correo del gestor)'));
+        R.ok('lectura: CERO escrituras también con Archivos', escrituras().length === 0, escrituras().join(' | '));
     }
     for (const d of document.querySelectorAll('dialog[open]')) d.close();
 } catch (e) {

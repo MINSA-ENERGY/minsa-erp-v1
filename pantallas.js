@@ -1,13 +1,15 @@
-// ERP v0.3.0 — las pantallas de la fase 4: Inicio · Mis pendientes, Proyectos, el tablero de un Proyecto (v0.3.0: con
-// escrituras — crear, mover arrastrando o desde la ficha, editar; viven en tarjetas.js) y las «en construcción» de Archivos,
-// Gastos y Equipo.
+// ERP v0.5.0 — las pantallas de la fase 4: Inicio · Mis pendientes, Proyectos, el tablero de un Proyecto (v0.3.0: con
+// escrituras — crear, mover arrastrando o desde la ficha, editar; viven en tarjetas.js), su pestaña Documentos y la pantalla
+// Archivos (v0.5.0: archivos.js), Equipo con «Escribió en la app» (v0.5.0) y la «en construcción» de Gastos (fase 5).
 // Forma: maqueta aprobada del 2026-10-01 (Main/Celular). Datos: las listas PROY_* de esquema.json, leidas como las lee
 // MINSA Proyectos (vistas.js/tablero.js). Todo con el()/textContent: los datos los escriben diez personas.
 
 import { misAbiertas, diasPara, columnasDe, tareasDe, avance, ordenar, ordenarProyectos, activosDe, nombreDe, nombreCorto,
-    saludoDe, porVence, colorValido, fechaMexico, HECHO, PUEDE } from './reglas.js';
-import { estado, el, chip, chipVence, equipoDe, iconoEquipo, mesDia, fechaLegible, porId } from './comun.js';
+    saludoDe, porVence, colorValido, fechaMexico, desdeHaceDias, HECHO, PUEDE } from './reglas.js';
+import { estado, el, chip, chipVence, equipoDe, iconoEquipo, mesDia, fechaLegible, porId, fechaCorta } from './comun.js';
 import { abrirNuevaTarea, abrirFicha, hacerArrastrable, hacerReceptora } from './tarjetas.js';
+import { pintarDocsProyecto, faltantesDe } from './archivos.js';
+import { CONFIG } from './config.js';
 
 const yo = () => (estado.cuenta && estado.cuenta.username) || '';
 
@@ -132,7 +134,7 @@ export function pintarProyectos(v, nav) {
 }
 
 // ---------------------------------------------------------------- Proyecto: tablero
-export function pintarProyecto(v, p, nav) {
+export function pintarProyecto(v, p, nav, pestanaP = 'tablero') {
     const eq = equipoDe(p);
     const vuelta = el('button', 'volver'); vuelta.type = 'button'; vuelta.textContent = '← Proyectos';
     vuelta.addEventListener('click', () => nav.ir('proyectos'));
@@ -157,6 +159,20 @@ export function pintarProyecto(v, p, nav) {
         cab.appendChild(falta);
     }
     v.appendChild(cab);
+
+    // v0.5.0: pestañas del proyecto — Tablero y Documentos (con «faltan N»; la maqueta: «Documentos que faltan · 6»). El hash
+    // es el de Proyectos: #p/<clave> y #p/<clave>/docs.
+    const tabs = el('div', 'tabs-proyecto'); tabs.setAttribute('role', 'tablist'); tabs.id = 'tabsProyecto';
+    const nFaltan = faltantesDe(p).length;
+    for (const [k, texto] of [['tablero', 'Tablero'], ['docs', 'Documentos']]) {
+        const b = el('button', 'tab' + (pestanaP === k ? ' is-on' : '')); b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.tab = k;
+        b.setAttribute('aria-selected', String(pestanaP === k)); b.appendChild(el('span', '', texto));
+        if (k === 'docs' && nFaltan) { const c = chip(`faltan ${nFaltan}`, 'warn'); c.title = `${nFaltan} ${nFaltan === 1 ? 'tarjeta abierta' : 'tarjetas abiertas'} sin documentos`; b.appendChild(c); }
+        b.addEventListener('click', () => nav.ir('proyecto', p.Clave, k));
+        tabs.appendChild(b);
+    }
+    v.appendChild(tabs);
+    if (pestanaP === 'docs') { pintarDocsProyecto(v, p, { abrirTarjeta: abrirFicha }); return; }
 
     const cols = columnasDe(p);
     const ts = tareasDe(p, estado.tareas);
@@ -205,12 +221,62 @@ export function pintarNoEncontrado(v, clave, nav) {
     v.appendChild(b);
 }
 
+// ---------------------------------------------------------------- Equipo (v0.5.0)
+/**
+ * «Escribió en la app» (la metrica de adopcion del plan: 6 de 10 personas con una escritura propia a las 6 semanas): por
+ * correo en minusculas, cuantos renglones de PROY_Actividad firmo (Quien) y el mas reciente. PROY_Actividad la escriben
+ * MINSA Proyectos y el ERP (misma lista) despues de cada escritura: crear, mover, editar, ligar, subir, anotar. Cuenta todo
+ * renglon, incluido el ✓ «visto» de Proyectos (tambien es una escritura propia). La app lee los ultimos CONFIG.actividadDias.
+ */
+export function escriturasPorPersona(actividad) {
+    const m = new Map();
+    for (const a of actividad || []) {
+        const k = String(a.Quien || '').trim().toLowerCase(); if (!k) continue;
+        const r = m.get(k) || { n: 0, ultima: '' };
+        r.n++; if (String(a.Cuando || '') > r.ultima) r.ultima = String(a.Cuando || '');
+        m.set(k, r);
+    }
+    return m;
+}
+export function pintarEquipo(v) {
+    const personas = estado.roles.filter(r => r.Activo !== false && r.Title)
+        .sort((a, b) => String(a.Nombre || a.Title).localeCompare(String(b.Nombre || b.Title), 'es'));
+    // Solo la ventana: abrir una ficha completa en memoria TODA la bitacora de su proyecto (asegurarActividadDe) y no debe mover la cifra.
+    const piso = desdeHaceDias(CONFIG.actividadDias);
+    const esc = escriturasPorPersona(piso ? estado.actividad.filter(a => String(a.Cuando || '') >= piso) : estado.actividad);
+    const escribieron = personas.filter(r => esc.has(String(r.Title).toLowerCase())).length;
+    v.appendChild(cabecera('Equipo', `${personas.length} ${personas.length === 1 ? 'persona activa' : 'personas activas'} · roles de PROY_Roles`, 'Personas y roles'));
+    const res = el('section', 'card adopcion'); res.id = 'equipoAdopcion';
+    const cab = el('div', 'card-cab'); cab.appendChild(el('h2', 'h2', 'Escribió en la app')); cab.appendChild(chip(`${escribieron} de ${personas.length}`, escribieron >= Math.min(6, personas.length) ? 'ok' : 'warn'));
+    res.appendChild(cab);
+    res.appendChild(el('p', 'muted', `Personas con al menos una escritura propia en los últimos ${CONFIG.actividadDias} días (crear, mover, editar, ligar, subir o anotar, aquí o en MINSA Proyectos: comparten la bitácora). La meta del plan es 6 de 10 a las 6 semanas de que el ERP se comparta con el equipo.`));
+    v.appendChild(res);
+    const card = el('section', 'card'); card.id = 'equipoLista';
+    const t = el('div', 'tabla-equipo'); t.setAttribute('role', 'table'); t.setAttribute('aria-label', 'Equipo');
+    const h = el('div', 'fila-eq cab'); h.setAttribute('role', 'row');
+    for (const x of ['Persona', 'Rol en la app', 'Pendientes abiertos', 'Escribió en la app']) { const c = el('span', 'lbl', x); c.setAttribute('role', 'columnheader'); h.appendChild(c); }
+    t.appendChild(h);
+    for (const r of personas) {
+        const correo = String(r.Title).toLowerCase(); const e = esc.get(correo);
+        const f = el('div', 'fila-eq'); f.setAttribute('role', 'row'); f.dataset.persona = correo;
+        const n = el('span', 'persona', r.Nombre || nombreDe(r.Title, estado.roles)); n.title = r.Title; n.setAttribute('role', 'cell'); f.appendChild(n);
+        const rol = el('span', 'rol'); rol.setAttribute('role', 'cell'); rol.appendChild(chip(r.Rol || '—')); f.appendChild(rol);
+        const ab = misAbiertas(estado.tareas, correo).length;
+        const a = el('span', 'abiertos'); a.setAttribute('role', 'cell'); a.dataset.abiertos = String(ab); a.appendChild(el('b', '', String(ab))); a.appendChild(el('span', 'muted', ab === 1 ? ' pendiente' : ' pendientes')); f.appendChild(a);
+        const u = el('span', 'uso'); u.setAttribute('role', 'cell'); u.dataset.escribio = e ? 'si' : 'no';
+        if (e) { u.appendChild(chip(`Sí · ${e.n}`, 'ok')); u.appendChild(el('span', 'muted', `última ${fechaCorta(e.ultima)}`)); } else u.appendChild(chip('No'));
+        f.appendChild(u);
+        t.appendChild(f);
+    }
+    if (!personas.length) card.appendChild(el('p', 'vacio', 'PROY_Roles no tiene personas activas.'));
+    card.appendChild(t);
+    v.appendChild(card);
+}
+
 // ---------------------------------------------------------------- en construccion
 // Honestas: dicen que NO esta, por que, y donde se hace hoy. El boton dice que falta (no hace nada).
 const EN_CONSTRUCCION = {
-    archivos: { titulo: 'Archivos', etiqueta: 'Todo lo que sube el equipo', texto: 'Esta pantalla todavía no existe en el ERP. Hoy los archivos se suben y se ligan a las tarjetas desde MINSA Proyectos, y quedan en la biblioteca de SharePoint de cada unidad.', falta: 'Falta: traer la subida al buzón y el árbol de archivos' },
-    gastos: { titulo: 'Gastos', etiqueta: 'Registro y reembolso', texto: 'Esta pantalla todavía no existe. Registrar un gasto (monto, concepto, proyecto y la foto opcional del ticket) llega en la fase 5 del plan, con su lista y la biblioteca «Gastos» en el sitio Administración.', falta: 'Falta: crear la lista y la biblioteca «Gastos»' },
-    equipo: { titulo: 'Equipo', etiqueta: 'Personas y roles', texto: 'Esta pantalla todavía no existe. Las personas y sus roles se leen ya de PROY_Roles; la vista de carga por persona llega después.', falta: 'Falta: la vista de carga por persona' }
+    gastos: { titulo: 'Gastos', etiqueta: 'Registro y reembolso', texto: 'Esta pantalla todavía no existe. Registrar un gasto (monto, concepto, proyecto y la foto opcional del ticket) llega en la fase 5 del plan, con su lista y la biblioteca «Gastos» en el sitio Administración.', falta: 'Falta: crear la lista y la biblioteca «Gastos»' }
 };
 export function pintarEnConstruccion(v, pestana) {
     const c = EN_CONSTRUCCION[pestana] || { titulo: pestana, etiqueta: '', texto: 'Esta pantalla todavía no existe.', falta: 'Falta: construirla' };
@@ -218,11 +284,6 @@ export function pintarEnConstruccion(v, pestana) {
     const card = el('section', 'card construccion'); card.id = 'enConstruccion';
     card.appendChild(chip('en construcción', 'warn'));
     card.appendChild(el('p', '', c.texto));
-    if (pestana === 'equipo') {
-        const ul = el('ul', 'personas');
-        for (const r of estado.roles.filter(x => x.Activo !== false)) { const li = el('li'); li.appendChild(el('span', '', r.Nombre || nombreDe(r.Title, estado.roles))); li.appendChild(el('span', 'lbl', r.Rol || '')); ul.appendChild(li); }
-        card.appendChild(ul);
-    }
     const b = el('button', 'btn incompleto', c.falta); b.type = 'button'; b.disabled = true;
     card.appendChild(b);
     v.appendChild(card);
