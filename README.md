@@ -1,4 +1,4 @@
-# MINSA ERP — app (v0.8.0, cierre de la fase 4: ficha y Documentos completos)
+# MINSA ERP — app (v0.9.0, paridad de Archivos con Proyectos: el árbol en `#archivos`)
 
 PWA del ERP de MINSA ENERGY (`erp.minsaenergy.com`). Sustituirá a MINSA Proyectos: mismo login de Entra
 (se **reusa su app registration**), mismas listas `PROY_*` del sitio Administración, cara nueva. El plan vive en
@@ -11,7 +11,7 @@ Copiado de `minsa-proyectos-app/app` **v0.160.0, commit `2489517`** (2026-10-01)
 
 | Traído tal cual | Ajustado | Nuevo en el ERP |
 |---|---|---|
-| `graph.js` · `reglas.js` · `lote.js` · `esquema.json` · `servidor-local.js` · `minsa-ui.css` · `vendor/` · `iconos/` · `marca/` · `_config.yml` · `.gitignore` · `.gitattributes` · `test/reglas.test.js` · `test/lote.test.js` · `test/vendor-vigente.js` | `comun.js` (VERSION; **v0.2.0: arreglo de `mesDia`**, ver abajo) · `config.js` (+`redirectProduccion`) · `sw.js` (caché `minsa-erp-v<minor>`: `minsa-erp-v8` desde v0.8.0) · `manifest.json` · `CNAME` · `package.json` · `test/sw.test.js` · `test/datos.test.js` · `test/e2e.ps1` | `index.html` · `app.js` · `pantallas.js` (v0.2.0) · `estilo.css` · `test/pruebas.html` |
+| `graph.js` · `reglas.js` · `lote.js` · `esquema.json` · `servidor-local.js` · `minsa-ui.css` · `vendor/` · `iconos/` · `marca/` · `_config.yml` · `.gitignore` · `.gitattributes` · `test/reglas.test.js` · `test/lote.test.js` · `test/vendor-vigente.js` | `comun.js` (VERSION; **v0.2.0: arreglo de `mesDia`**, ver abajo) · `config.js` (+`redirectProduccion`) · `sw.js` (caché `minsa-erp-v<minor>`: `minsa-erp-v9` desde v0.9.0) · `manifest.json` · `CNAME` · `package.json` · `test/sw.test.js` · `test/datos.test.js` · `test/e2e.ps1` | `index.html` · `app.js` · `pantallas.js` (v0.2.0) · `estilo.css` · `test/pruebas.html` |
 
 **No se trajeron** las vistas de Proyectos (`vistas.js`, `tablero.js`, `capital.js`, `chat.js`, `docs.js`): se leyeron
 como referencia de qué campos pinta cada pantalla, y las del ERP se escriben nuevas en `pantallas.js`.
@@ -67,7 +67,7 @@ Lee `PROY_Proyectos`, `PROY_Tareas`, `PROY_Roles` (y las columnas reales de `PRO
 
 ```
 npm test            # piel al día, selectores, comentarios, reglas (214), lote (27), gastos (58), tonos (26, v0.8.0), sw, datos
-npm run test:e2e    # PowerShell + Edge headless, 6 corridas: v0.8.0 = gerencia 222 · colaborador 221 · lectura 122 · tesoreria 238 · contabilidad 236 · sin-gastos 188 (v0.7.0: 183 · 182 · 110 · 199 · 197 · 149)
+npm run test:e2e    # PowerShell + Edge headless, 6 corridas: v0.9.0 = gerencia 236 · colaborador 235 · lectura 135 · tesoreria 252 · contabilidad 250 · sin-gastos 202 (v0.8.0: 222 · 221 · 122 · 238 · 236 · 188)
 python ../herramientas-cfdi/test_cruce_cfdi.py   # v0.7.0: reglas del cruce con CFDI (25, una contra el índice real si está sincronizado)
 node ../herramientas-dev/capturas.mjs --salida ../docs/capturas/v<versión>   # 390/1366 × claro/oscuro, mide desborde
 ```
@@ -89,8 +89,10 @@ de este repo).
 - Escribir una vez en real por lista (PENDIENTE de Carlos, arriba).
 - ~~Fase 4, lo que sigue: en la ficha, color, subir/bajar orden y «crear y otra»; en Archivos, mover una liga a otra tarjeta
   (F1 de Proyectos) y el árbol plegable de expediente (v0.33.0); borrar una nota~~: HECHO en **v0.8.0** (sección abajo), con
-  la paridad de la ficha y de Documentos cerrada. Queda fuera a propósito: el árbol en `#archivos` (Proyectos v0.36.0, una raíz
-  plegable por proyecto) y mover una liga desde `#archivos` o desde la ficha — ver «Qué NO se hizo» en v0.8.0.
+  la paridad de la ficha y de Documentos cerrada. ~~Queda fuera: el árbol en `#archivos`~~: HECHO en **v0.9.0** (abajo). Mover una
+  liga desde `#archivos` o desde la ficha **no se hace porque Proyectos tampoco lo hace** (evidencia en la sección v0.9.0): con eso
+  la paridad de Archivos con Proyectos v0.160.0 queda cerrada.
+- **Escribir una vez en real** lo de v0.9.0: no aplica — v0.9.0 no escribe nada nuevo (el árbol solo lee).
 - **Escribir una vez en real** lo de v0.8.0 (PENDIENTE de Carlos): un color, un Subir/Bajar, un «Crear y otra», mover una liga
   y borrar una nota, y ver que Proyectos lo pinta igual (sección v0.8.0).
 - **Escribir una vez en real en `PROY_Ligas`** (subir un lote al buzón de CALYTEK, ligar, pegar enlace, quitar) y ver que
@@ -407,8 +409,7 @@ en `PROY_Tareas`/`PROY_Ligas`; borrar una nota es un DELETE; y ni reordenar ni b
 
 ### Qué NO se hizo (y por qué)
 
-- **El árbol en `#archivos`** (Proyectos v0.36.0: una raíz plegable por proyecto): el alcance era el árbol de expediente
-  (v0.33.0), que vive en Documentos del proyecto. `#archivos` sigue con su lista agrupada.
+- ~~**El árbol en `#archivos`** (Proyectos v0.36.0: una raíz plegable por proyecto)~~: llegó en **v0.9.0**.
 - **Mover una liga desde la ficha o desde `#archivos`**: Proyectos tampoco lo hace desde `#archivos`; en la ficha, los
   documentos ya son de esa tarjeta y Documentos lo resuelve.
 - **El color de las cubetas** (editor de cubetas de Proyectos v0.11.0/v0.12.0): no estaba en el alcance; el ERP solo **pinta** el
@@ -440,3 +441,60 @@ borrar una nota propia (y que desaparezca también del chat de Proyectos).
   se abre, 412, al proyecto entero); borrar una nota (confirmar encima de la ficha, cancelar, DELETE único, sin bitácora; la ajena
   solo gerencia); lectura: nada de eso, ni forzando.
 - Sin capturas nuevas en esta versión (no se corrió `capturas.mjs`).
+
+## v0.9.0 (2026-10-02) — paridad de Archivos con Proyectos: el árbol en `#archivos`
+
+Lo que v0.8.0 dejó fuera de la fase 4 («paridad con Proyectos»), contra MINSA Proyectos v0.160.0 (`vistas.js` `pintarArchivosCuerpo`,
+`docs.js` `filasDeExpediente` / `filaRaiz` / `filaDoc`). **No escribe nada nuevo** en SharePoint, no toca `esquema.json` ni
+`PROY_Actividad.Accion` (decisión 6).
+
+### Qué hace
+
+| Dónde | Qué | De dónde sale |
+|---|---|---|
+| `#archivos` · **árbol** | Una **raíz plegable por proyecto** (caret, carpeta, icono del equipo, título, «N documentos» o «N de M» con filtro, botón **Documentos** que abre su pestaña) y debajo **el mismo expediente que Documentos**: «Del proyecto» y una carpeta por tarjeta (cubeta, vencimiento, «N docs», color de la tarjeta o de su cubeta). **Nace todo plegado**; lo abierto **vive la sesión** (`estado.abiertasArchivos`, llaves `p7`, `p7/0`, `p7/t12`), como el filtro. «Abrir todo» / «Plegar todo» se apagan cuando no tienen nada que hacer. | Proyectos v0.36.0, v0.45.0 (sin la tarjeta por renglón: la carpeta la nombra) y v0.51.0 |
+| `#archivos` · **con filtro** | Con tipo, proyecto o texto **todo se ve abierto**, el caret no toca lo abierto y los dos botones se apagan; al soltar el filtro el árbol vuelve a como estaba. | U-01 de Proyectos (17-sep) |
+| Código | Un solo árbol: `expediente()`, `nodoCarpeta()`, `carpetaArbol()`, `barraDeArbol()` y `aplicarPliegue()` (`archivos.js`) los usan **Documentos y `#archivos`**; el de Documentos es el de v0.8.0 refactorizado (mismo DOM, sus llaves pasan a texto: `'0'`, `'12'`). | `filasDeExpediente` de Proyectos |
+
+### Mover una liga de tarjeta: dónde lo permite Proyectos (y por qué el ERP no suma nada)
+
+Verificado en el código de Proyectos v0.160.0:
+
+| Vista | Proyectos | ERP |
+|---|---|---|
+| Documentos del proyecto | **Sí**: `filaDoc` arma `selectTarjeta` → `reasignarLiga` cuando `sinTarjeta && puede && p && !enArchivos` (renglón «Mover a» del menú «⋯», v0.55.0) | Sí, desde v0.8.0 (`reasignarLiga`, select «Mover a» bajo el nombre) |
+| `#archivos` | **No**: `vistas.js` pinta las hojas con `doc: () => ({ p, enArchivos: true, alTarjeta })`, sin `puede` — el select no se arma; el subtítulo dice «Para ligar, quitar o cambiar de tarjeta, entra a Documentos del proyecto» | No (la E2E lo afirma: ni `[data-tarjeta-de]` ni `.mover-liga` en `#archivosLista`); la nota de la pantalla ahora dice «Para quitar una liga o cambiarla de tarjeta, entra a Documentos del proyecto» |
+| Ficha de la tarjeta | **No**: `tablero.js` importa de `docs.js` solo `abrirLigar, abrirSubir, abrirEnlace, quitarLiga, puedeLigarEn, puedeEnlazarEn`; `reasignarLiga` ni siquiera se exporta. La ficha solo quita | No (E2E: la ficha tiene «Quitar» y no «Mover a») |
+
+### Defaults del implementador (se revierten en una línea)
+
+- **El árbol de `#archivos` nace todo plegado** (Carlos en Proyectos v0.51.0). Revertir: en `pintarListaArchivos`, sembrar
+  `estado.abiertasArchivos` con todas las `llaves` la primera vez.
+- **Lo abierto vive la sesión** (salir de `#archivos` y volver lo conserva; recargar lo pliega), como Proyectos. Revertir: vaciar
+  `estado.abiertasArchivos` al entrar a la pantalla.
+- **Sin el nodo «tarjetas sin documentos»** en el árbol (Proyectos tampoco lo pone en `#archivos`: «aquí solo se encuentra, no se
+  liga»); el ERP las cuenta arriba en «Qué documentos faltan».
+- **Sin «Abrir tarjeta» ni «Copiar ruta» por documento** (Proyectos los tiene en su menú «⋯»; el ERP no tiene ese menú y su renglón
+  ya dice dónde quedó). Queda como diferencia conocida, fuera del alcance pedido.
+- **El icono del equipo en la raíz** usa el color que el equipo ya trae en `config.js` (`--c`); sin colores nuevos. Revertir: quitar
+  `icono: iconoEquipo(…)` en `pintarListaArchivos` y la regla `.raiz-docs .eqi`.
+- **La E2E termina con «Abrir todo» en `#archivos`**, para que las capturas enseñen el árbol entero (las carpetas que la E2E crea
+  después nacen plegadas, por eso «De la colega» sale cerrada).
+
+### Cómo revertir
+
+`git revert` del commit de v0.9.0 en este repo (no toca datos: v0.9.0 solo lee). Por partes: en `archivos.js`, devolver
+`pintarListaArchivos` a la lista agrupada (`.grupo-docs` + `.sec`) y, si se quiere, re-inlinear el árbol de `pintarDocsProyecto`;
+en `estilo.css`, el bloque v0.9.0 (y las dos reglas `.grupo-docs .sec`, que salieron por quedar sin uso).
+
+### Pruebas y capturas
+
+- `npm test`: sin cambios en los conteos (reglas 214 · lote 27 · gastos 58 · tonos 26 · sw · datos) — el árbol es DOM y lo prueba la E2E.
+- `npm run test:e2e`: gerencia 222 → **236** · colaborador 221 → **235** · lectura 122 → **135** · tesoreria 238 → **252** ·
+  contabilidad 236 → **250** · sin-gastos 188 → **202**. Nuevo: una raíz por proyecto con conteo y «Documentos»; el mismo expediente
+  debajo (títulos, color morado de la tarjeta); nace todo plegado; abrir raíz y luego carpeta; con filtro todo se ve, el caret no
+  pliega y los botones se apagan; al soltar el filtro vuelve a como estaba; «Abrir/Plegar todo»; lo abierto sobrevive a salir y
+  volver; `#archivos` y la ficha sin «Mover a» (todos los roles para `#archivos`; los que escriben para la ficha).
+- Capturas: `../docs/capturas/v0.9.0/` (archivos, docs, ficha × 390/1366 × claro/oscuro, gerencia, 12 PNG; `_mediciones.txt`:
+  overflowX = 0 y fuera-de-ancho = 0 en las 12). A 390 la foto es de la ventana y el árbol queda abajo del pliegue. Graph falso:
+  ningún dato real.

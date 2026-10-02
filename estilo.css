@@ -318,8 +318,6 @@ button.kc:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; 
 .falta-proy .nombre { color: var(--text-strong); font-weight: 500; flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
 /* lista de documentos (pestaña Documentos, #archivos y la ficha) */
 .grupo-docs { display: flex; flex-direction: column; margin-top: 8px; }
-.grupo-docs .sec { font: 600 11px var(--font-ui); letter-spacing: .09em; text-transform: uppercase; padding: 6px 0 8px; border-bottom: 1px solid var(--line-soft); display: flex; gap: 10px; align-items: center; color: var(--text-muted); }
-.grupo-docs .sec .enlace-proyecto { font: 600 12px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; color: var(--brand); }
 .doc { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
 .doc:last-child { border-bottom: 0; }
 .doc-cuerpo { min-width: 0; }
@@ -480,3 +478,9 @@ button.kc:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; 
 .carpeta-docs .nodo .n { margin-left: auto; font-size: 12px; color: var(--text-muted); }
 .carpeta-cuerpo { padding-left: 28px; }
 @media (max-width: 720px) { .carpeta-cuerpo { padding-left: 12px; } }
+/* ==== v0.9.0 — #archivos en arbol (Proyectos v0.36.0): una RAIZ plegable por proyecto con el expediente debajo ==== */
+.raiz-fila { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--line-soft); }
+.raiz-fila .nodo { flex: 1 1 auto; min-width: 0; border-bottom: 0; }
+.raiz-docs > .raiz-fila .grupo-titulo { font-weight: 600; }
+.raiz-docs .eqi { display: inline-flex; flex: none; color: var(--c); }
+.raiz-docs .ir-docs { flex: none; }

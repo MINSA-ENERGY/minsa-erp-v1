@@ -13,6 +13,8 @@
 // v0.8.0: lo que faltaba de docs.js — MOVER una liga a otra tarjeta (F1, con confirmacion, PATCH con If-Match de solo TareaId y
 // «ligar» en la bitacora, la misma frase de Proyectos) y el ARBOL PLEGABLE de expediente de la pestaña Documentos (v0.33.0: una
 // carpeta por tarjeta con su cubeta y vencimiento; nace todo plegado como Proyectos v0.52.0; «Abrir todo» / «Plegar todo»).
+// v0.9.0: el ARBOL de #archivos (Proyectos v0.36.0: una raiz plegable por proyecto con el mismo expediente debajo), con las
+// mismas piezas que el de Documentos (`expediente`, `nodoCarpeta`, `aplicarPliegue`).
 // Nada de innerHTML: el() / textContent.
 
 import { CONFIG } from './config.js';
@@ -21,7 +23,7 @@ import { PUEDE, tareasDe, slug, fechaMexico, nombreCorto, validarUrl, urlParaLig
     colorValido, claseDeColumna } from './reglas.js';
 import { construirManifiesto, validarManifiesto, bytesDelManifiesto, nombreCarpetaLote, NOMBRE_MANIFIESTO, rutaRecibo, validarRecibo } from './lote.js';
 import { $, L, VERSION, estado, el, boton, chip, chipVence, iconoArchivo, avisar, abrirDialogo, cerrarDialogo, confirmar, opciones, limpiar,
-    porId, registrarActividad, fechaCorta, agregarSinDuplicar, aplicarVivo, pedirRelectura, iconoSvg } from './comun.js';
+    porId, registrarActividad, fechaCorta, agregarSinDuplicar, aplicarVivo, pedirRelectura, iconoSvg, iconoEquipo, equipoDe } from './comun.js';
 import { esConflicto } from './graph.js';
 
 let alCambiar = () => {};
@@ -177,55 +179,93 @@ export function pintarDocsProyecto(v, p, { abrirTarjeta = null } = {}) {
     // lo ABIERTO) y lo abierto sobrevive a los repintados mientras no se cambie de proyecto. Las tarjetas sin documentos no van aqui:
     // ya las enseña «Qué documentos faltan», arriba (la decision de v0.5.0).
     if (arbol.proyectoId !== p.id) arbol = { proyectoId: p.id, abiertas: new Set() };
-    const grupos = new Map();
-    for (const l of [...todas].sort((a, b) => String(b._creado || '').localeCompare(String(a._creado || '')) || b.id - a.id)) { const k = l.TareaId ? Number(l.TareaId) : 0; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(l); }
-    const titulo = k => { if (!k) return 'Del proyecto'; const t = porId(estado.tareas, k); return t ? t.Title : `Tarjeta #${k}`; };
-    const llaves = [...grupos.keys()].sort((a, b) => (a === 0 ? -1 : b === 0 ? 1 : String(titulo(a)).localeCompare(String(titulo(b)))));
-    if (llaves.length) {
-        const barraArbol = el('div', 'arbol-acciones');
-        const abrirTodo = boton('Abrir todo', 'mn-btn is-ghost is-sm', () => { for (const k of llaves) arbol.abiertas.add(k); aplicarPliegue(cl, llaves); }); abrirTodo.id = 'docsAbrirTodo';
-        const plegarTodo = boton('Plegar todo', 'mn-btn is-ghost is-sm', () => { for (const k of llaves) arbol.abiertas.delete(k); aplicarPliegue(cl, llaves); }); plegarTodo.id = 'docsPlegarTodo';
-        barraArbol.appendChild(abrirTodo); barraArbol.appendChild(plegarTodo); cl.appendChild(barraArbol);
-    }
-    for (const k of llaves) {
-        const g = el('div', 'grupo-docs carpeta-docs'); g.dataset.grupo = String(k);
-        const t = k ? porId(estado.tareas, k) : null;
-        const n = grupos.get(k).length;
-        const h = el('button', 'nodo'); h.type = 'button'; h.dataset.nodo = String(k);
-        h.appendChild(iconoSvg(TRAZOS_CARET, 'caret'));
-        const ic = iconoSvg(TRAZOS_CARPETA, 'carpeta');
-        if (t) { const color = colorValido(t.Color); if (color) ic.dataset.tono = color; else ic.classList.add('is-' + claseDeColumna(t.Columna, cols)); }
-        h.appendChild(ic);
-        h.appendChild(el('span', 'grupo-titulo', titulo(k)));
-        if (t) { h.appendChild(el('span', 'cubeta-de', nombreColumnaEn(t.Columna, cols))); const v2 = chipVence(t); if (v2) h.appendChild(v2); }
-        h.appendChild(el('span', 'n', `${n} ${plural(n, 'doc')}`));
-        h.addEventListener('click', () => { if (arbol.abiertas.has(k)) arbol.abiertas.delete(k); else arbol.abiertas.add(k); aplicarPliegue(cl, llaves); });
-        g.appendChild(h);
-        const cuerpo = el('div', 'carpeta-cuerpo');
-        for (const l of grupos.get(k)) cuerpo.appendChild(filaLiga(l, { puede: puedeDe(l), conTarjeta: false, moverEn: p }));
-        g.appendChild(cuerpo);
-        cl.appendChild(g);
-    }
-    aplicarPliegue(cl, llaves);
+    const A = arbol.abiertas;
+    const llaves = [];
+    const pliegue = () => aplicarPliegue(cl, llaves, A, barraArbol);
+    const barraArbol = todas.length ? barraDeArbol(cl, 'docs', () => llaves, A, pliegue) : null;
+    const alPlegar = k => { if (A.has(k)) A.delete(k); else A.add(k); pliegue(); };
+    llaves.push(...expediente(cl, p, todas, { alPlegar, fila: l => filaLiga(l, { puede: puedeDe(l), conTarjeta: false, moverEn: p }) }));
+    pliegue();
     v.appendChild(cl);
     if (bib && todas.some(l => l.Tipo === 'buzon' && l.Ruta)) marcarBuzonEnVivo(p, todas, cl, gen, bib, puedeLigarEn(p));
 }
-// v0.8.0: el arbol de Documentos. `abiertas` guarda lo ABIERTO (0 = Del proyecto, id de cada tarjeta); se reinicia al cambiar de proyecto.
+// v0.8.0: el arbol de Documentos. `abiertas` guarda lo ABIERTO ('0' = Del proyecto, id de cada tarjeta; v0.9.0: en texto, como
+// las llaves de #archivos); se reinicia al cambiar de proyecto. El de #archivos vive en estado.abiertasArchivos (toda la sesion).
 let arbol = { proyectoId: null, abiertas: new Set() };
 const TRAZOS_CARET = ['M9 6l6 6-6 6'];
 const TRAZOS_CARPETA = ['M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'];
-/** Pliega o despliega en el DOM, sin repintar (la consulta del buzon en vivo sigue escribiendo sobre los mismos renglones), y
- *  apaga «Abrir todo» / «Plegar todo» cuando ya no tienen nada que hacer. */
-function aplicarPliegue(cl, llaves) {
-    for (const g of cl.querySelectorAll('.carpeta-docs')) {
-        const abierta = arbol.abiertas.has(Number(g.dataset.grupo));
-        g.classList.toggle('is-plegada', !abierta);
-        const h = g.querySelector('.nodo'); h.setAttribute('aria-expanded', String(abierta)); h.title = abierta ? 'Plegar' : 'Desplegar';
-        g.querySelector('.carpeta-cuerpo').hidden = !abierta;
+
+// ---------------------------------------------------------------- v0.9.0: el arbol, UNO para Documentos y #archivos
+// Proyectos v0.36.0 (filasDeExpediente): el expediente de un proyecto —«Del proyecto» y una carpeta por tarjeta— lo comparten
+// la pestaña Documentos (raiz = la pestaña misma) y #archivos (una RAIZ plegable por proyecto encima). Aqui es la misma
+// funcion `expediente` con la llave prefijada, el mismo `nodoCarpeta` y el mismo `aplicarPliegue`.
+
+/** El boton de una carpeta: caret + icono de carpeta (color de la tarjeta, o de su cubeta) + titulo + cubeta y vence + conteo. */
+function nodoCarpeta(llave, titulo, conteo, { tarea = null, cols = null, icono = null } = {}) {
+    const h = el('button', 'nodo'); h.type = 'button'; h.dataset.nodo = llave;
+    h.appendChild(iconoSvg(TRAZOS_CARET, 'caret'));
+    const ic = iconoSvg(TRAZOS_CARPETA, 'carpeta');
+    if (tarea) { const color = colorValido(tarea.Color); if (color) ic.dataset.tono = color; else ic.classList.add('is-' + claseDeColumna(tarea.Columna, cols)); }
+    h.appendChild(ic);
+    if (icono) h.appendChild(icono);
+    h.appendChild(el('span', 'grupo-titulo', titulo));
+    if (tarea) { h.appendChild(el('span', 'cubeta-de', nombreColumnaEn(tarea.Columna, cols))); const v = chipVence(tarea); if (v) h.appendChild(v); }
+    h.appendChild(el('span', 'n', conteo));
+    return h;
+}
+/** Una carpeta (`.carpeta-docs`, data-grupo = su llave) con su cabeza y su cuerpo; el clic en el nodo llama `alPlegar(llave)`. */
+function carpetaArbol(llave, nodo, alPlegar, { clase = '', cabeza = null } = {}) {
+    const g = el('div', 'grupo-docs carpeta-docs' + (clase ? ' ' + clase : '')); g.dataset.grupo = llave;
+    nodo.addEventListener('click', () => alPlegar(llave));
+    g.appendChild(cabeza || nodo);
+    const cuerpo = el('div', 'carpeta-cuerpo'); g.appendChild(cuerpo);
+    return { g, cuerpo };
+}
+/**
+ * El expediente de un proyecto dentro de `cont`: «Del proyecto» primero y luego una carpeta por tarjeta (por titulo), cada una con
+ * sus documentos (`fila(l)`), de la liga mas nueva a la mas vieja. `llave(k)` traduce la llave local (0 = Del proyecto, id de
+ * tarjeta) a la del Set de abiertas: Documentos la usa tal cual ('0', '12'); #archivos la prefija por proyecto ('p7/0', 'p7/t12'),
+ * porque los ids de tarjeta y de proyecto se cruzan. Devuelve las llaves usadas.
+ */
+function expediente(cont, p, ligas, { llave = k => String(k), alPlegar, fila }) {
+    const cols = columnasDe(p);
+    const grupos = new Map();
+    for (const l of [...ligas].sort((a, b) => String(b._creado || '').localeCompare(String(a._creado || '')) || b.id - a.id)) { const k = l.TareaId ? Number(l.TareaId) : 0; if (!grupos.has(k)) grupos.set(k, []); grupos.get(k).push(l); }
+    const tareaDe = new Map([...grupos.keys()].filter(Boolean).map(k => [k, porId(estado.tareas, k)]));
+    const titulo = k => { if (!k) return 'Del proyecto'; const t = tareaDe.get(k); return t ? t.Title : `Tarjeta #${k}`; };
+    const locales = [...grupos.keys()].sort((a, b) => (a === 0 ? -1 : b === 0 ? 1 : String(titulo(a)).localeCompare(String(titulo(b))) || a - b));
+    for (const k of locales) {
+        const n = grupos.get(k).length;
+        const { g, cuerpo } = carpetaArbol(llave(k), nodoCarpeta(llave(k), titulo(k), `${n} ${plural(n, 'doc')}`, { tarea: tareaDe.get(k) || null, cols }), alPlegar);
+        for (const l of grupos.get(k)) cuerpo.appendChild(fila(l));
+        cont.appendChild(g);
     }
-    const a = cl.querySelector('#docsAbrirTodo'), pl = cl.querySelector('#docsPlegarTodo');
-    if (a) a.disabled = llaves.every(k => arbol.abiertas.has(k));
-    if (pl) pl.disabled = llaves.every(k => !arbol.abiertas.has(k));
+    return locales.map(llave);
+}
+/** «Abrir todo» / «Plegar todo» (ids `<prefijo>AbrirTodo` / `<prefijo>PlegarTodo`) al final de `cont`, antes que las carpetas;
+ *  las llaves se leen al clic (`llavesDe()`) y `pliegue()` vuelve a aplicar el Set. */
+function barraDeArbol(cont, prefijo, llavesDe, abiertas, pliegue) {
+    const b = el('div', 'arbol-acciones');
+    const abrir = boton('Abrir todo', 'mn-btn is-ghost is-sm', () => { for (const k of llavesDe()) abiertas.add(k); pliegue(); }); abrir.id = prefijo + 'AbrirTodo';
+    const plegar = boton('Plegar todo', 'mn-btn is-ghost is-sm', () => { for (const k of llavesDe()) abiertas.delete(k); pliegue(); }); plegar.id = prefijo + 'PlegarTodo';
+    b.appendChild(abrir); b.appendChild(plegar); cont.appendChild(b);
+    return { abrir, plegar };
+}
+/** Pliega o despliega en el DOM, sin repintar (la consulta del buzon en vivo sigue escribiendo sobre los mismos renglones), y
+ *  apaga «Abrir todo» / «Plegar todo» cuando ya no tienen nada que hacer. Con `filtrando` (#archivos con filtro o busqueda, U-01 de
+ *  Proyectos) todo se ve abierto, el Set no se toca y los dos botones se apagan. */
+function aplicarPliegue(cont, llaves, abiertas, barra = null, { filtrando = false } = {}) {
+    for (const g of cont.querySelectorAll('.carpeta-docs')) {
+        const abierta = filtrando || abiertas.has(g.dataset.grupo);
+        g.classList.toggle('is-plegada', !abierta);
+        const h = g.querySelector(':scope > .nodo, :scope > .raiz-fila > .nodo');
+        h.setAttribute('aria-expanded', String(abierta)); h.title = filtrando ? 'Con filtro se ve todo' : abierta ? 'Plegar' : 'Desplegar';
+        g.querySelector(':scope > .carpeta-cuerpo').hidden = !abierta;
+    }
+    if (barra) {
+        barra.abrir.disabled = filtrando || llaves.every(k => abiertas.has(k));
+        barra.plegar.disabled = filtrando || llaves.every(k => !abiertas.has(k));
+    }
 }
 
 /** La cola async del buzon (C-03 de Proyectos): sale en cuanto su pintada ya no es la vigente. Una consulta por liga de tipo
@@ -260,7 +300,8 @@ async function marcarBuzonEnVivo(p, ligas, cont, gen, bib, puede) {
 // ---------------------------------------------------------------- #archivos: todo lo que sube el equipo
 
 /** La pantalla #archivos: Subir (eligiendo proyecto), «qué documentos faltan» por proyecto, y TODAS las ligas por proyecto con
- *  filtro de proyecto, tipo y texto. Aqui no se quita ni se reasigna (como #archivos de Proyectos): eso es del proyecto. */
+ *  filtro de proyecto, tipo y texto, en el ARBOL de Proyectos v0.36.0 (v0.9.0). Aqui no se quita ni se reasigna (como #archivos de
+ *  Proyectos, que pinta sus filas con `enArchivos` y sin `puede`): eso es de Documentos del proyecto. */
 export function pintarArchivos(v, nav) {
     const cab = el('div', 'cabecera');
     const t = el('div'); t.appendChild(el('div', 'lbl', 'Todo lo que sube el equipo')); t.appendChild(el('h1', 'ttl', 'Archivos'));
@@ -270,7 +311,7 @@ export function pintarArchivos(v, nav) {
     if (subibles.length) { const b = boton('Subir', 'mn-btn is-primary', () => abrirSubir({}), { subirGeneral: '1' }); b.id = 'btnSubirArchivos'; cab.appendChild(b); }
     else { const b = el('button', 'btn incompleto', PUEDE.ligar(estado.rol) ? 'Subir: ningún proyecto activo tiene biblioteca con permiso' : 'Subir: tu rol es de lectura'); b.type = 'button'; b.disabled = true; b.id = 'btnSubirArchivos'; cab.appendChild(b); }
     v.appendChild(cab);
-    v.appendChild(el('p', 'muted nota-archivos', 'Lo que subes queda en la biblioteca de SharePoint de la unidad del proyecto (su buzón 99_Pendiente-Archivar) y la skill de archivar lo acomoda. Para quitar una liga, entra a Documentos del proyecto.'));
+    v.appendChild(el('p', 'muted nota-archivos', 'Lo que subes queda en la biblioteca de SharePoint de la unidad del proyecto (su buzón 99_Pendiente-Archivar) y la skill de archivar lo acomoda. Para quitar una liga o cambiarla de tarjeta, entra a Documentos del proyecto.'));
 
     // Que falta, por proyecto activo: un renglon con la cuenta y el boton a su pestaña Documentos.
     const activos = ordenarProyectos(estado.proyectos.filter(p => p.Estado === 'activo'));
@@ -323,16 +364,27 @@ function pintarListaArchivos(nav) {
     const filtrando = !!(f.texto || '').trim() || !!f.tipo || !!f.proyectoId;
     $('archivosSub').textContent = filtrando ? `${ligas.length} de ${todas.length} ${plural(todas.length, 'documento')}` : `${todas.length} ${plural(todas.length, 'documento ligado', 'documentos ligados')} en todos los frentes`;
     if (!ligas.length) { cont.appendChild(el('p', 'vacio', todas.length ? 'Nada con ese filtro.' : 'Ningún documento ligado todavía. Se sube o se liga desde Documentos de cada proyecto, o con «Subir».')); return; }
+    // v0.9.0 — el ARBOL de Proyectos v0.36.0: una RAIZ plegable por proyecto (con su boton «Documentos») y debajo el MISMO
+    // expediente que la pestaña Documentos (`expediente`): «Del proyecto» y una carpeta por tarjeta. Nace todo plegado (Proyectos
+    // v0.51.0) y lo abierto vive la sesion (estado.abiertasArchivos), como el filtro. Con filtro o busqueda TODO se ve y el caret no
+    // toca el Set (U-01): al soltar el filtro el arbol vuelve a como estaba. Aqui no se quita ni se mueve (como Proyectos): solo se encuentra.
     const porP = new Map(); for (const l of ligas) { const k = Number(l.ProyectoId); if (!porP.has(k)) porP.set(k, []); porP.get(k).push(l); }
+    const totalPorP = new Map(); for (const l of todas) { const k = Number(l.ProyectoId); totalPorP.set(k, (totalPorP.get(k) || 0) + 1); }
+    const S = estado.abiertasArchivos; const llaves = [];
+    const pliegue = () => aplicarPliegue(cont, llaves, S, barra, { filtrando });
+    const alPlegar = k => { if (filtrando) return; if (S.has(k)) S.delete(k); else S.add(k); pliegue(); };
+    const barra = barraDeArbol(cont, 'archivos', () => llaves, S, pliegue);
     for (const p of ordenarProyectos(estado.proyectos.filter(x => porP.has(x.id)))) {
-        const g = el('div', 'grupo-docs'); g.dataset.proyecto = String(p.id);
-        const h = el('div', 'sec');
-        const ir = p.Clave ? boton(p.Title, 'enlace-proyecto', () => nav.ir('proyecto', p.Clave, 'docs'), { irProyecto: p.Clave }) : el('span', '', p.Title);
-        h.appendChild(ir); h.appendChild(el('span', 'n', `${porP.get(p.id).length} ${plural(porP.get(p.id).length, 'doc')}`));
-        g.appendChild(h);
-        for (const l of porP.get(p.id)) g.appendChild(filaLiga(l, { puede: false }));
+        const kp = `p${p.id}`; const n = porP.get(p.id).length, total = totalPorP.get(p.id) || n; llaves.push(kp);
+        const nodo = nodoCarpeta(kp, p.Title || '(sin nombre)', n === total ? `${total} ${plural(total, 'documento')}` : `${n} de ${total}`, { icono: iconoEquipo(equipoDe(p), 'sm') });
+        const cabeza = el('div', 'raiz-fila'); cabeza.appendChild(nodo);
+        if (p.Clave) { const b = boton('Documentos', 'mn-btn is-ghost is-sm ir-docs', () => { const q = porId(estado.proyectos, p.id); if (q && q.Clave) nav.ir('proyecto', q.Clave, 'docs'); }, { irProyecto: p.Clave }); b.title = 'Abrir Documentos del proyecto'; cabeza.appendChild(b); }
+        const { g, cuerpo } = carpetaArbol(kp, nodo, alPlegar, { clase: 'raiz-docs', cabeza });
+        g.dataset.proyecto = String(p.id);
+        llaves.push(...expediente(cuerpo, p, porP.get(p.id), { llave: k => `${kp}/${k ? 't' + k : 0}`, alPlegar, fila: l => filaLiga(l, { puede: false, conTarjeta: false }) }));
         cont.appendChild(g);
     }
+    pliegue();
 }
 /** Proyectos activos donde se puede subir (rol + biblioteca autorizada). */
 const subiblesActivos = () => ordenarProyectos(estado.proyectos.filter(p => puedeLigarEn(p)));
@@ -393,7 +445,7 @@ export async function reasignarLiga(liga, tareaId, sel = null) {
     try {
         const res = await estado.cliente.actualizarRenglon(estado.siteId, L.ligas, l.id, { TareaId: nuevo }, m => avisar(m, 'ojo'), l._etag);
         aplicarVivo(estado.ligas, l.id, { TareaId: nuevo }, res && res._etag, l);
-        if (arbol.proyectoId === Number(l.ProyectoId)) arbol.abiertas.add(nuevo || 0);
+        if (arbol.proyectoId === Number(l.ProyectoId)) arbol.abiertas.add(String(nuevo || 0));   // v0.9.0: llaves en texto
         avisar(t ? `«${l.Title}» ahora es de la tarjeta «${t.Title}».` : `«${l.Title}» ahora es del proyecto entero.`, 'ok');
         alCambiar();
         await registrarActividad('ligar', t ? `pasó la liga «${String(l.Title).slice(0, 60)}» a «${String(t.Title).slice(0, 60)}»` : `dejó la liga «${String(l.Title).slice(0, 60)}» para el proyecto entero`, l.ProyectoId, nuevo);

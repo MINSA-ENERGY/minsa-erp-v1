@@ -388,7 +388,7 @@ try {
     await esperar(() => !$('pantallaSesion').classList.contains('oculto'), 'pantalla de sesion', 15000);
     await esperar(() => pantalla(), 'primera pantalla');
     R.ok('entra con MSAL y oculta la entrada', $('pantallaEntrar').classList.contains('oculto'));
-    R.ok('pie con la version', $('pie').textContent === 'MINSA ERP v0.8.0', $('pie').textContent);
+    R.ok('pie con la version', $('pie').textContent === 'MINSA ERP v0.9.0', $('pie').textContent);
     R.ok('celular: «···» lleva Tema y Salir', !!document.querySelector('#masMovil #temaMovil') && !!document.querySelector('#masMovil #btnSalirMovil'));
     R.ok('nombre de PROY_Roles, no el correo', $('quien').textContent === 'Persona de Prueba', $('quien').textContent);
     R.ok('rol leido de PROY_Roles', $('rolQuien').textContent === ROL, $('rolQuien').textContent);
@@ -461,13 +461,45 @@ try {
     await irA('#archivos', 'archivos');
     R.ok('Archivos: ya no es «en construcción»', vista().querySelector('h1').textContent === 'Archivos' && !$('enConstruccion'));
     R.ok('Archivos: lee PROY_Ligas y PROY_Actividad (acotada por Cuando)', DB.llamadas.some(c => c.includes('/lists/lista-ligas/items')) && DB.filtros.some(f => /^fields\/Cuando ge '/.test(f)), DB.filtros.join(' | '));
-    R.ok('Archivos: las 5 ligas, agrupadas por proyecto', filasDoc('#archivosLista').length === 5 && textos('#archivosLista .grupo-docs .sec .enlace-proyecto').join('|') === 'LAU CALYTEK|Servicio PITEPEC', `${filasDoc('#archivosLista').length} · ${textos('#archivosLista .grupo-docs .sec .enlace-proyecto').join('|')}`);
+    const raices = () => textos('#archivosLista .raiz-docs > .raiz-fila .grupo-titulo').join('|');
+    R.ok('Archivos: las 5 ligas, agrupadas por proyecto', filasDoc('#archivosLista').length === 5 && raices() === 'LAU CALYTEK|Servicio PITEPEC', `${filasDoc('#archivosLista').length} · ${raices()}`);
     R.ok('Archivos: el subtítulo cuenta los documentos', $('archivosSub').textContent === '5 documentos ligados en todos los frentes', $('archivosSub').textContent);
     R.ok('Archivos: un título con HTML se pinta como texto', vista().textContent.includes(XSS_LIGA) && !vista().querySelector('img') && !window.__xss2);
     R.ok('Archivos: estados archivado · en el buzón · enlace · dirección externa', ['archivado', 'en el buzón', 'enlace', 'dirección externa'].every(e => textos('#archivosLista .estado .mn-chip').includes(e)), textos('#archivosLista .estado .mn-chip').join(','));
     R.ok('Archivos: una Url fuera de SharePoint no se abre (sin <a>)', !document.querySelector(`#archivosLista [data-liga="${lgFuera}"] a`) && !!document.querySelector(`#archivosLista [data-liga="${lgArch}"] a[href^="https://minsaenergy.sharepoint.com/"][rel~="noopener"]`));
     R.ok('Archivos: «dónde quedó» nombra biblioteca y carpeta', document.querySelector(`#archivosLista [data-liga="${lgArch}"] .donde`)?.textContent === 'Ambiental-CALYTEK › 04_SGI/02_Ambiental', document.querySelector(`#archivosLista [data-liga="${lgArch}"] .donde`)?.textContent);
     R.ok('Archivos: aquí no se quita (como #archivos de Proyectos)', !document.querySelector('#archivosLista .quitar'));
+    R.ok('Archivos (v0.9.0): aquí tampoco se mueve una liga de tarjeta (Proyectos: filaDoc con enArchivos, sin puede)', !document.querySelector('#archivosLista [data-tarjeta-de], #archivosLista .mover-liga'));
+    // v0.9.0: el ARBOL de #archivos (Proyectos v0.36.0): una raíz plegable por proyecto con el expediente debajo; nace todo plegado
+    // (v0.51.0), con filtro todo se ve sin tocar lo abierto (U-01), «Abrir todo» / «Plegar todo».
+    { const nodoA = k => document.querySelector(`#archivosLista .nodo[data-nodo="${k}"]`);
+      const exp = k => nodoA(k)?.getAttribute('aria-expanded');
+      const visA = id => !!document.querySelector(`#archivosLista [data-liga="${id}"]`)?.offsetParent;
+      const todosNodos = () => [...document.querySelectorAll('#archivosLista .carpeta-docs .nodo')];
+      const kl = `p${lau}`, kp = `p${pit}`;
+      const hijosLau = [`${kl}/0`, `${kl}/t${tHoy}`, `${kl}/t${tVencida}`];
+      R.ok('Archivos (v0.9.0): árbol — una raíz por proyecto con su conteo y el botón «Documentos»', document.querySelectorAll('#archivosLista .raiz-docs').length === 2 && nodoA(kl).querySelector('.n').textContent === '4 documentos' && nodoA(kp).querySelector('.n').textContent === '1 documento' && !!document.querySelector('#archivosLista .raiz-docs [data-ir-proyecto="lau-demo"]') && !!document.querySelector('#archivosLista .raiz-docs [data-ir-proyecto="pitepec-demo"]'), `${nodoA(kl)?.textContent} | ${nodoA(kp)?.textContent}`);
+      R.ok('Archivos (v0.9.0): debajo de cada raíz, el mismo expediente que Documentos («Del proyecto» y una carpeta por tarjeta)', textos(`#archivosLista .raiz-docs[data-grupo="${kl}"] > .carpeta-cuerpo > .carpeta-docs > .nodo .grupo-titulo`).join('|') === 'Del proyecto|Para hoy mía|Vencida mía' && hijosLau.every(k => nodoA(k)) && !!nodoA(`${kp}/0`) && nodoA(`${kl}/t${tHoy}`).querySelector('.carpeta').dataset.tono === 'morado', textos(`#archivosLista .raiz-docs[data-grupo="${kl}"] > .carpeta-cuerpo > .carpeta-docs > .nodo .grupo-titulo`).join('|'));
+      R.ok('Archivos (v0.9.0): nace todo plegado — ni un documento a la vista', todosNodos().length === 6 && todosNodos().every(n => n.getAttribute('aria-expanded') === 'false') && ![lgArch, lgEnlace, lgBuzon, lgFuera].some(visA), todosNodos().map(n => n.getAttribute('aria-expanded')).join(','));
+      R.ok('Archivos (v0.9.0): «Abrir todo» vivo y «Plegar todo» apagado', !$('archivosAbrirTodo').disabled && $('archivosPlegarTodo').disabled);
+      nodoA(kl).click();
+      R.ok('Archivos (v0.9.0): abrir la raíz enseña sus carpetas, todavía plegadas', exp(kl) === 'true' && hijosLau.every(k => !!nodoA(k).offsetParent && exp(k) === 'false') && !visA(lgFuera) && exp(kp) === 'false');
+      nodoA(`${kl}/t${tHoy}`).click();
+      R.ok('Archivos (v0.9.0): abrir una carpeta enseña SOLO sus documentos', exp(`${kl}/t${tHoy}`) === 'true' && visA(lgFuera) && !visA(lgArch) && !visA(lgEnlace) && !$('archivosAbrirTodo').disabled && !$('archivosPlegarTodo').disabled);
+      document.querySelector('#archivosTipo [data-tipo="enlace"]').click();
+      R.ok('Archivos (v0.9.0): con filtro TODO se ve y «Abrir/Plegar todo» se apagan', visA(lgEnlace) && todosNodos().every(n => n.getAttribute('aria-expanded') === 'true') && $('archivosAbrirTodo').disabled && $('archivosPlegarTodo').disabled);
+      nodoA(kl).click();
+      R.ok('Archivos (v0.9.0): con filtro el caret no pliega nada', exp(kl) === 'true' && visA(lgEnlace));
+      document.querySelector('#archivosTipo [data-tipo="todos"]').click();
+      R.ok('Archivos (v0.9.0): al soltar el filtro el árbol vuelve a como estaba', exp(kl) === 'true' && exp(`${kl}/t${tHoy}`) === 'true' && exp(`${kl}/0`) === 'false' && exp(kp) === 'false' && visA(lgFuera) && !visA(lgEnlace));
+      $('archivosAbrirTodo').click();
+      R.ok('Archivos (v0.9.0): «Abrir todo» despliega las 6 y se apaga', todosNodos().every(n => n.getAttribute('aria-expanded') === 'true') && [lgArch, lgEnlace, lgBuzon, lgFuera].every(visA) && $('archivosAbrirTodo').disabled && !$('archivosPlegarTodo').disabled);
+      $('archivosPlegarTodo').click();
+      R.ok('Archivos (v0.9.0): «Plegar todo» las vuelve a plegar', todosNodos().every(n => n.getAttribute('aria-expanded') === 'false') && ![lgArch, lgEnlace, lgBuzon, lgFuera].some(visA) && $('archivosPlegarTodo').disabled);
+      nodoA(kl).click(); nodoA(`${kl}/t${tVencida}`).click();
+      await irA('#inicio', 'inicio'); await irA('#archivos', 'archivos');
+      R.ok('Archivos (v0.9.0): lo abierto sobrevive a salir y volver (vive la sesión)', exp(kl) === 'true' && exp(`${kl}/t${tVencida}`) === 'true' && visA(lgArch) && exp(`${kl}/t${tHoy}`) === 'false');
+      $('archivosAbrirTodo').click(); }   // se queda abierto: las capturas de #archivos enseñan el árbol entero
     const faltaProy = id => document.querySelector(`#archivosFaltan [data-proyecto="${id}"]`)?.textContent || '';
     R.ok('Archivos: qué documentos faltan, por proyecto activo', /7 tarjetas abiertas sin documentos/.test(faltaProy(lau)) && /1 tarjeta abierta sin documentos/.test(faltaProy(pit)) && $('archivosFaltan').querySelector('.card-cab .mn-chip').textContent === '8', `${faltaProy(lau)} | ${faltaProy(pit)}`);
     document.querySelector('#archivosTipo [data-tipo="enlace"]').click();
@@ -873,6 +905,7 @@ try {
         poner('enTitulo', 'Correo de la colega'); poner('enUrl', 'https://outlook.office.com/mail/id/xyz'); $('formEnlace').requestSubmit();
         await esperar(() => !$('dlgEnlace').open && $('dlgFicha').open && document.querySelector('#fDocs .doc'), 'de vuelta a la ficha con el documento');
         R.ok('ficha → enlace: al guardar vuelve a la ficha y el documento aparece en ella', /Correo de la colega/.test($('fDocs').textContent) && $('fDocsN').textContent === '1' && ligaDB('Correo de la colega').fields.TareaId === tColega);
+        R.ok('ficha (v0.9.0): el documento se quita, pero no se mueve desde aquí (Proyectos: la ficha solo quita; mover es de Documentos)', !!document.querySelector('#fDocs .quitar') && !document.querySelector('#fDocs [data-tarjeta-de], #fDocs .mover-liga'));
         document.querySelector(`#fDocsAltas [data-subir-a="${tColega}"]`).click(); await esperar(() => $('dlgSubir').open && !$('dlgFicha').open, 'Subir desde la ficha');
         clic('sbCancelar'); await esperar(() => !$('dlgSubir').open && $('dlgFicha').open, 'cancelar vuelve a la ficha');
         R.ok('ficha → subir: cancelar vuelve a la ficha', $('dlgFicha').open && $('fCab').textContent === 'De la colega');
