@@ -28,7 +28,7 @@
 </head>
 <body>
 
-<!-- ERP v0.2.0 — fase 4, arranque: armazon (rail que colapsa a pestañas, tema claro/oscuro, ruta por hash), Inicio · Mis
+<!-- ERP v0.3.0 (escrituras del kanban: dialogos al final) · v0.2.0 — fase 4, arranque: armazon (rail que colapsa a pestañas, tema claro/oscuro, ruta por hash), Inicio · Mis
      pendientes, Proyectos y el tablero de un proyecto (solo lectura). Archivos, Gastos y Equipo: «en construcción». -->
 <section id="pantallaEntrar" class="entrar">
   <img class="logo solo-claro" src="./marca/lockup.svg" alt="MINSA ENERGY" width="724" height="256">
@@ -64,6 +64,45 @@
     <div id="vista" class="vista"></div>
   </main>
 </div>
+
+<!-- v0.3.0: las escrituras del kanban (tarjetas.js). Patron .mn-dialog de la piel; el boton de guardar dice QUE FALTA. -->
+<dialog id="dlgNueva" class="mn-dialog dlg-erp" aria-labelledby="ntCab">
+  <form id="formNueva" novalidate>
+    <div class="mn-dialog-head"><div><h2 id="ntCab">Nueva tarea</h2><div id="ntProyecto" class="lbl"></div></div><button id="ntCerrar" class="mn-btn is-sm" type="button" aria-label="Cerrar">×</button></div>
+    <div class="mn-dialog-body">
+      <div class="dlg-avisos" role="status" aria-live="polite"></div>
+      <div class="mn-field"><label for="ntTitulo">Título</label><input id="ntTitulo" maxlength="255" autocomplete="off" placeholder="Qué hay que hacer"></div>
+      <div class="dos">
+        <div class="mn-field"><label for="ntColumna">Cubeta</label><select id="ntColumna"></select></div>
+        <div class="mn-field"><label for="ntPrioridad">Prioridad</label><select id="ntPrioridad"><option value="alta">Alta</option><option value="normal">Normal</option><option value="baja">Baja</option></select></div>
+      </div>
+      <div class="dos">
+        <div class="mn-field"><label for="ntAsignado">Asignado</label><select id="ntAsignado"></select></div>
+        <div class="mn-field"><label for="ntVence">Vence</label><input id="ntVence"></div>
+      </div>
+      <div class="mn-field"><label for="ntDesc">Descripción</label><textarea id="ntDesc" rows="3" placeholder="Opcional"></textarea></div>
+    </div>
+    <div class="mn-dialog-foot"><button id="ntCancelar" class="mn-btn" type="button">Cancelar</button><button id="ntGuardar" class="mn-btn" type="submit" disabled>Falta el título</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlgFicha" class="mn-dialog dlg-erp" aria-labelledby="fCab">
+  <form id="formFicha" novalidate>
+    <div class="mn-dialog-head"><div class="ficha-cab"><h2 id="fCab"></h2><div id="fDonde" class="lbl"></div></div><button id="fCerrar" class="mn-btn is-sm" type="button" aria-label="Cerrar">×</button></div>
+    <div class="mn-dialog-body">
+      <div class="dlg-avisos" role="status" aria-live="polite"></div>
+      <p id="fSoloLectura" class="nota-lectura oculto"></p>
+      <div class="mn-field"><label for="fTitulo">Título</label><input id="fTitulo" maxlength="255" autocomplete="off"></div>
+      <div class="dos">
+        <div class="mn-field"><label for="fAsignado">Asignado</label><select id="fAsignado"></select></div>
+        <div class="mn-field"><label for="fPrioridad">Prioridad</label><select id="fPrioridad"><option value="alta">Alta</option><option value="normal">Normal</option><option value="baja">Baja</option></select></div>
+      </div>
+      <div class="mn-field"><label for="fVence">Vence</label><input id="fVence"></div>
+      <div id="fMoverCaja" class="mover-caja"><div class="lbl">Mover a</div><div id="fMover" class="mover" role="group" aria-label="Mover a otra cubeta"></div></div>
+    </div>
+    <div class="mn-dialog-foot"><button id="fBorrar" class="mn-btn borrar oculto" type="button">Borrar tarjeta</button><button id="fGuardar" class="mn-btn" type="submit" disabled>Sin cambios</button></div>
+  </form>
+</dialog>
 
 <script src="./vendor/msal-browser.min.js" integrity="sha256-px+JPcPJ+jxZIZ4FNatqAKYoGGDyQxWrgRgwS6r6zGQ="></script>
 <script type="module" src="./app.js"></script>

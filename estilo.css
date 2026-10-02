@@ -253,3 +253,33 @@ body { margin: 0; background: var(--surface-page); color: var(--text-body); font
 #avisos .mensaje.error { background: var(--status-danger-bg); color: var(--status-danger-fg); }
 #avisos .mensaje .cerrar { margin-left: auto; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; }
 .pie { color: var(--text-faint); font-size: 12px; text-align: center; }
+
+/* v0.3.0 — escrituras del kanban: la tarjeta es un boton (abre su ficha) y se arrastra en escritorio; los dialogos .mn-dialog. */
+button.kc { width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+button.kc:hover { border-color: var(--line); }
+button.kc:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.kc .titulo { display: block; }
+.kc[draggable="true"] { cursor: grab; }
+.kc.arrastrando { opacity: .45; }
+.kcol.recibe { outline: 2px dashed var(--brand); outline-offset: -2px; }
+.dlg-erp { width: min(34rem, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; }
+.dlg-erp .mn-dialog-head { align-items: flex-start; }
+.dlg-erp .mn-dialog-head h2 { overflow-wrap: anywhere; }
+.dlg-erp .ficha-cab { min-width: 0; }
+.dlg-erp .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.dlg-erp .dos .mn-field + .mn-field { margin-top: 0; }
+.dlg-erp .dos + .mn-field { margin-top: 12px; }
+.dlg-erp .mn-dialog-foot { flex-wrap: wrap; }
+.dlg-erp .borrar { margin-right: auto; color: var(--status-danger-solid); }
+.dlg-erp .mover-caja { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+.dlg-erp .mover { display: flex; flex-wrap: wrap; gap: 8px; }
+.dlg-erp .mover .is-here { opacity: 1; font-weight: 600; }
+.dlg-erp .dlg-avisos:empty { display: none; }
+.dlg-erp .dlg-avisos { margin-bottom: 12px; }
+.dlg-erp .fecha-campo { display: flex; gap: 8px; align-items: center; position: relative; }
+.dlg-erp .fecha-campo input[type="text"] { flex: 1; min-width: 0; }
+.dlg-erp .fecha-nativa { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; right: 0; bottom: 0; }
+@media (max-width: 480px) { .dlg-erp .dos { grid-template-columns: 1fr; } }
+.dlg-erp .fecha-cal { min-height: var(--control-h); min-width: 44px; display: inline-flex; align-items: center; justify-content: center; }
+.dlg-erp .fecha-cal svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.dlg-erp .mover-caja > .lbl { font-size: .68rem; text-transform: uppercase; letter-spacing: .07em; font-weight: 600; color: var(--text-muted); }

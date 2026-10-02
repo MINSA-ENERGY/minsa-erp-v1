@@ -1,6 +1,6 @@
 {
   "name": "minsa-erp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "ERP de MINSA ENERGY (sustituye a MINSA Proyectos): PWA sobre las mismas listas PROY_* de SharePoint, con el motor de Proyectos v0.160.0",

@@ -1,4 +1,4 @@
-// ERP de MINSA ENERGY — v0.2.0 (fase 4 del plan, docs/plan.md, arranque). Sustituira a MINSA Proyectos.
+// ERP de MINSA ENERGY — v0.3.0 (fase 4 del plan, docs/plan.md: v0.3.0 suma las escrituras del kanban, tarjetas.js). Sustituira a MINSA Proyectos.
 //
 // Entrada con Entra (MSAL por REDIRECCION, token en sessionStorage: la misma secuencia de Proyectos v0.160.0), lectura de
 // PROY_Proyectos / PROY_Tareas / PROY_Roles con el motor traido (graph.js + reglas.js + comun.js), y el ARMAZON: rail que en
@@ -9,8 +9,9 @@
 import { CONFIG } from './config.js';
 import { crearCliente } from './graph.js';
 import { rolDe, nombreDe, misAbiertas, iniciales } from './reglas.js';
-import { $, L, VERSION, estado, el, avisar, fijarHash, iconoSvg, proyectoPorClave } from './comun.js';
+import { $, L, VERSION, estado, el, avisar, fijarHash, iconoSvg, proyectoPorClave, fijarReleer } from './comun.js';
 import { pintarInicio, pintarProyectos, pintarProyecto, pintarEnConstruccion, pintarNoEncontrado } from './pantallas.js';
+import { engancharTarjetas, alCambiarTareas } from './tarjetas.js';
 
 // La redirect URI de produccion es la registrada en Entra; en cualquier otro host (localhost de la E2E) la pagina misma.
 const PRODUCCION = new URL(CONFIG.redirectProduccion);
@@ -152,12 +153,21 @@ async function salir() {
     catch (_) { sessionStorage.clear(); window.location.reload(); }
 }
 
-/** Lee las tres listas que pintan las pantallas de esta version. Solo lectura: v0.2.0 no escribe nada. */
+/** Lee las tres listas que pintan las pantallas y, una vez por sesion, los nombres reales de las columnas de PROY_Tareas
+ *  (C-02 de Proyectos: AsignadoPor solo se escribe si la lista ya lo tiene; si la lectura falla queda null y no se manda).
+ *  v0.3.0 escribe en PROY_Tareas y PROY_Actividad (tarjetas.js) y, al borrar, suelta las ligas de PROY_Ligas. */
 async function cargarTodo() {
-    const [proyectos, tareas, roles] = await Promise.all([L.proyectos, L.tareas, L.roles].map(n => estado.cliente.renglones(estado.siteId, n)));
-    estado.proyectos = proyectos; estado.tareas = tareas; estado.roles = roles;
+    const s = estado.siteId, c = estado.cliente;
+    const columnasTareas = async () => estado.columnasTareas || c.columnas(s, await c.idDeLista(s, L.tareas)).then(cs => new Set(cs.map(x => x.name))).catch(e => { console.warn('PROY_Tareas: no se pudieron leer las columnas; AsignadoPor no se escribe.', e && e.message); return null; });
+    const [proyectos, tareas, roles, colsTareas] = await Promise.all([...[L.proyectos, L.tareas, L.roles].map(n => c.renglones(s, n)), columnasTareas()]);
+    estado.proyectos = proyectos; estado.tareas = tareas; estado.roles = roles; estado.columnasTareas = colsTareas;
     estado.cargadoEl = Date.now();
 }
+// Tras una escritura propia se repinta; tras un 412 se RELEE (la verdad esta en SharePoint) y se repinta.
+function repintar() { if (!estado.sesion) return; contadores(); pintar(); }
+alCambiarTareas(repintar);
+fijarReleer(async () => { try { await cargarTodo(); } catch (e) { avisar('No se pudo releer: ' + (e && e.message ? e.message : e), 'error'); } repintar(); });
+engancharTarjetas();
 async function sesionIniciada() {
     estado.cuenta = pca.getActiveAccount() || pca.getAllAccounts()[0];
     let ultimo = await token();

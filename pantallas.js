@@ -1,11 +1,13 @@
-// ERP v0.2.0 — las pantallas de la fase 4 (arranque): Inicio · Mis pendientes, Proyectos, el tablero de un Proyecto (SOLO
-// LECTURA en esta version: mover tarjetas llega despues) y las «en construcción» de Archivos, Gastos y Equipo.
+// ERP v0.3.0 — las pantallas de la fase 4: Inicio · Mis pendientes, Proyectos, el tablero de un Proyecto (v0.3.0: con
+// escrituras — crear, mover arrastrando o desde la ficha, editar; viven en tarjetas.js) y las «en construcción» de Archivos,
+// Gastos y Equipo.
 // Forma: maqueta aprobada del 2026-10-01 (Main/Celular). Datos: las listas PROY_* de esquema.json, leidas como las lee
 // MINSA Proyectos (vistas.js/tablero.js). Todo con el()/textContent: los datos los escriben diez personas.
 
 import { misAbiertas, diasPara, columnasDe, tareasDe, avance, ordenar, ordenarProyectos, activosDe, nombreDe, nombreCorto,
-    iniciales, saludoDe, porVence, colorValido, fechaMexico, HECHO } from './reglas.js';
+    iniciales, saludoDe, porVence, colorValido, fechaMexico, HECHO, PUEDE } from './reglas.js';
 import { estado, el, chip, chipVence, equipoDe, iconoEquipo, mesDia, fechaLegible, porId } from './comun.js';
+import { abrirNuevaTarea, abrirFicha, hacerArrastrable, hacerReceptora } from './tarjetas.js';
 
 const yo = () => (estado.cuenta && estado.cuenta.username) || '';
 
@@ -129,7 +131,7 @@ export function pintarProyectos(v, nav) {
     }
 }
 
-// ---------------------------------------------------------------- Proyecto: tablero (solo lectura)
+// ---------------------------------------------------------------- Proyecto: tablero
 export function pintarProyecto(v, p, nav) {
     const eq = equipoDe(p);
     const vuelta = el('button', 'volver'); vuelta.type = 'button'; vuelta.textContent = '← Proyectos';
@@ -145,9 +147,15 @@ export function pintarProyecto(v, p, nav) {
     const h = el('h1', 'ttl', p.Title || '(sin nombre)'); h.id = 'tituloProyecto'; t.appendChild(h);
     if (p.Descripcion) t.appendChild(el('div', 'sub desc', p.Descripcion));
     cab.appendChild(t);
-    // El boton dice QUE FALTA (patron de la maqueta): crear tarjetas sigue en MINSA Proyectos mientras esta version sea de lectura.
-    const falta = el('button', 'btn incompleto', 'Nueva tarea: aún en MINSA Proyectos'); falta.type = 'button'; falta.disabled = true;
-    cab.appendChild(falta);
+    // v0.3.0: «Nueva tarea» abre el dialogo. Si no se puede, el boton dice POR QUE (patron de la maqueta) y no hace nada.
+    const activo = p.Estado === 'activo';
+    if (activo && PUEDE.tarea(estado.rol)) {
+        const b = el('button', 'mn-btn is-primary', '+ Nueva tarea'); b.type = 'button'; b.id = 'btnNuevaTarea';
+        b.addEventListener('click', () => abrirNuevaTarea(p)); cab.appendChild(b);
+    } else {
+        const falta = el('button', 'btn incompleto', activo ? 'Nueva tarea: tu rol es de lectura' : 'Proyecto cerrado: no admite tareas'); falta.type = 'button'; falta.disabled = true; falta.id = 'btnNuevaTarea';
+        cab.appendChild(falta);
+    }
     v.appendChild(cab);
 
     const cols = columnasDe(p);
@@ -155,25 +163,30 @@ export function pintarProyecto(v, p, nav) {
     const sinCubeta = ts.filter(x => !cols.some(c => c.clave === x.Columna));
     const tab = el('div', 'kanban'); tab.id = 'kanban';
     tab.style.setProperty('--ncol', String(cols.length + (sinCubeta.length ? 1 : 0)));
-    cols.forEach((c, i) => tab.appendChild(columnaKanban(c.nombre, ts.filter(x => x.Columna === c.clave), c.clave === HECHO ? 'k-hecho' : i === 0 ? 'k-por-hacer' : 'k-en-curso', c.clave, c.color)));
-    if (sinCubeta.length) tab.appendChild(columnaKanban('Sin cubeta', sinCubeta, '', '', ''));
+    cols.forEach((c, i) => tab.appendChild(columnaKanban(p, c.nombre, ts.filter(x => x.Columna === c.clave), c.clave === HECHO ? 'k-hecho' : i === 0 ? 'k-por-hacer' : 'k-en-curso', c.clave, c.color)));
+    if (sinCubeta.length) tab.appendChild(columnaKanban(p, 'Sin cubeta', sinCubeta, '', '', ''));
     v.appendChild(tab);
-    v.appendChild(el('p', 'nota-lectura', 'Solo lectura en esta versión: mover y editar tarjetas sigue en MINSA Proyectos.'));
+    const nota = !activo ? 'El proyecto está cerrado: el tablero es de consulta.' : PUEDE.mover(estado.rol)
+        ? 'Arrastra una tarjeta a otra cubeta, o tócala para editarla y moverla desde su ficha.'
+        : 'Tu rol es de lectura: puedes ver el tablero y abrir las tarjetas, no cambiarlas.';
+    const n = el('p', 'nota-lectura', nota); n.id = 'notaTablero'; v.appendChild(n);
 }
-function columnaKanban(nombre, tarjetas, clase, clave, color) {
+function columnaKanban(p, nombre, tarjetas, clase, clave, color) {
     const col = el('section', 'kcol ' + clase); col.dataset.columna = clave;
+    hacerReceptora(col, clave, p);   // «Sin cubeta» (clave vacia) no recibe
     if (colorValido(color)) col.dataset.color = colorValido(color);
     const h = el('div', 'kcol-cab'); h.appendChild(el('h2', 'lbl', nombre)); h.appendChild(el('span', 'mn-chip', String(tarjetas.length)));
     col.appendChild(h);
-    for (const t of ordenar(tarjetas)) col.appendChild(tarjetaKanban(t));
+    for (const t of ordenar(tarjetas)) col.appendChild(tarjetaKanban(t, p));
     if (!tarjetas.length) col.appendChild(el('p', 'vacio', 'Nada aquí todavía.'));
     return col;
 }
-function tarjetaKanban(t) {
-    const c = el('article', 'kc'); c.dataset.tarea = t.id;
+function tarjetaKanban(t, p) {
+    // v0.3.0: la tarjeta es un BOTON (abre su ficha; teclado incluido) y, si el rol mueve, se arrastra a otra cubeta.
+    const c = el('button', 'kc'); c.type = 'button'; c.dataset.tarea = t.id;
     if (colorValido(t.Color)) c.dataset.color = colorValido(t.Color);
-    c.appendChild(el('div', 'titulo', t.Title || '(sin título)'));
-    const pie = el('div', 'kc-pie');
+    c.appendChild(el('span', 'titulo', t.Title || '(sin título)'));
+    const pie = el('span', 'kc-pie');
     if (t.Asignado) {
         const q = el('span', 'quien'); q.appendChild(el('span', 'av', iniciales(nombreDe(t.Asignado, estado.roles))));
         q.appendChild(el('span', 'muted', nombreCorto(t.Asignado, estado.roles))); pie.appendChild(q);
@@ -181,6 +194,8 @@ function tarjetaKanban(t) {
     const cv = chipVence(t); if (cv) pie.appendChild(cv);
     if (t.Prioridad === 'alta' && t.Columna !== HECHO) pie.appendChild(chip('alta', 'danger'));
     c.appendChild(pie);
+    c.addEventListener('click', () => abrirFicha(t.id));
+    hacerArrastrable(c, t, p);
     return c;
 }
 export function pintarNoEncontrado(v, clave, nav) {

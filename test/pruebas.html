@@ -5,7 +5,9 @@
 <title>Pruebas de extremo a extremo — MINSA ERP</title>
 <!-- ERP v0.1.0. Corre la app REAL (index.html + app.js) contra un Graph FALSO en memoria y un MSAL falso.
      El MSAL falso, el Graph falso y la bitacora son COPIA LITERAL de minsa-proyectos-app/app/test/pruebas.html
-     (v0.160.0, lineas 35-256); los escenarios de abajo son los de v0.2.0: armazon, Inicio · Mis pendientes, Proyectos, el kanban y las «en construcción».
+     (v0.160.0, lineas 35-256); los escenarios de abajo son los de v0.2.0 (armazon, Inicio · Mis pendientes, Proyectos, el kanban y las «en construcción») y,
+     desde v0.3.0, las ESCRITURAS del kanban portadas de los escenarios de tablero de Proyectos: crear, mover (ficha y arrastre),
+     editar, el 412 con relectura, borrar (solo gerencia) y el rol lectura sin ninguna escritura.
      Los ~2,800 renglones de escenarios de Proyectos prueban sus VISTAS (tablero, docs, chat, capital...), que no se
      trajeron; vuelven por pantalla en la fase 4. Sin CSP a proposito (herramienta de desarrollo, _config.yml la
      excluye de Pages). Se corre desde app/ con `npm run test:e2e` (PowerShell + Edge headless, 3 roles). -->
@@ -299,7 +301,7 @@ try {
     await esperar(() => !$('pantallaSesion').classList.contains('oculto'), 'pantalla de sesion', 15000);
     await esperar(() => pantalla(), 'primera pantalla');
     R.ok('entra con MSAL y oculta la entrada', $('pantallaEntrar').classList.contains('oculto'));
-    R.ok('pie con la version', $('pie').textContent === 'MINSA ERP v0.2.0', $('pie').textContent);
+    R.ok('pie con la version', $('pie').textContent === 'MINSA ERP v0.3.0', $('pie').textContent);
     R.ok('nombre de PROY_Roles, no el correo', $('quien').textContent === 'Persona de Prueba', $('quien').textContent);
     R.ok('rol leido de PROY_Roles', $('rolQuien').textContent === ROL, $('rolQuien').textContent);
     R.ok('lee las 3 listas que pinta', ['PROY_Proyectos', 'PROY_Tareas', 'PROY_Roles'].every(n => DB.llamadas.some(c => c.includes('/lists/lista-' + esquema.listas.find(l => l.nombre === n).clave + '/items'))), DB.llamadas.join(' | '));
@@ -337,7 +339,8 @@ try {
     R.ok('kanban: la tarjeta lleva quién (nombre corto) e iniciales', [...document.querySelectorAll('#kanban .kc')].some(c => /Colega/.test(c.textContent) && c.querySelector('.av')?.textContent === 'CD'));
     R.ok('kanban: la tarjeta sin asignar dice «sin dueño»', !!document.querySelector('#kanban .kc .sin-dueno'));
     R.ok('kanban: orden, alta primero en «Por hacer»', document.querySelector('#kanban .k-por-hacer .kc .titulo').textContent === 'Vencida mía');
-    R.ok('kanban: el botón dice qué falta y no hace nada', !!document.querySelector('.cabecera .btn.incompleto[disabled]'));
+    if (ROL === 'lectura') R.ok('kanban (lectura): «Nueva tarea» dice por qué no y no hace nada', $('btnNuevaTarea').disabled && $('btnNuevaTarea').classList.contains('incompleto') && $('btnNuevaTarea').textContent === 'Nueva tarea: tu rol es de lectura', $('btnNuevaTarea').textContent);
+    else R.ok('kanban: «Nueva tarea» vivo para quien escribe', !$('btnNuevaTarea').disabled && !$('btnNuevaTarea').classList.contains('incompleto'), $('btnNuevaTarea').textContent);
     R.ok('kanban: responsable por nombre', /Responsable: Jefa Demo/.test(vista().textContent));
     await irA('#p/pitepec-demo', 'proyecto');
     R.ok('kanban: cubetas propias del proyecto (Columnas)', cols() === 'Pendiente:0 Haciendo:1 Listo:1', cols());
@@ -374,8 +377,158 @@ try {
     R.ok('el tema se recuerda en el dispositivo', guardado === 'light', String(guardado));
     delete raiz.dataset.theme; try { localStorage.removeItem('erp.tema'); } catch (_) {}
 
-    R.ok('v0.2.0 no escribe nada', !DB.llamadas.some(c => /^(POST|PATCH|PUT|DELETE) /.test(c)), DB.llamadas.filter(c => !c.startsWith('GET ')).join(' | '));
+    R.ok('leer y navegar no escribe nada', !DB.llamadas.some(c => /^(POST|PATCH|PUT|DELETE) /.test(c)), DB.llamadas.filter(c => !c.startsWith('GET ')).join(' | '));
     R.ok('sin avisos de error', !document.querySelector('#avisos .mensaje.error'), document.querySelector('#avisos')?.textContent);
+
+    // 10. v0.3.0: ESCRITURAS del kanban (portadas de los escenarios de tablero de Proyectos v0.160.0).
+    const filas = k => DB.listas[k].items;
+    const actividad = acc => filas('actividad').filter(a => a.fields.Accion === acc);
+    const tarea = titulo => filas('tareas').find(x => x.fields.Title === titulo);
+    const avisoCon = txt => [...document.querySelectorAll('#avisos .mensaje, dialog[open] .dlg-avisos .mensaje')].find(m => m.textContent.includes(txt));
+    const poner = (id, v) => { const i = $(id); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); };
+    const tarjetaDe = titulo => [...document.querySelectorAll('#kanban .kc')].find(c => c.querySelector('.titulo').textContent === titulo);
+    const colDe = titulo => tarjetaDe(titulo)?.closest('.kcol')?.dataset.columna;
+    const escrituras = () => DB.llamadas.filter(c => /^(POST|PATCH|PUT|DELETE) /.test(c));
+    const colsEsquema = n => new Set(esquema.listas.find(l => l.nombre === n).columnas.map(c => c.nombre));
+    const enEsquema = (campos, n) => Object.keys(campos).filter(k => !colsEsquema(n).has(k));
+    const ddmm = iso => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+    const TJ = await import('./tarjetas.js');
+    await irA('#p/lau-demo', 'proyecto');
+    const lauP = DB.listas.proyectos.items.find(x => x.fields.Clave === 'lau-demo');
+
+    if (ROL !== 'lectura') {
+        R.ok('escribir: la nota del tablero dice cómo mover', /Arrastra una tarjeta/.test($('notaTablero').textContent));
+        R.ok('escribir: las tarjetas se arrastran (draggable)', tarjetaDe('Vencida mía').draggable);
+
+        // 10.1 Crear (dialogo .mn-dialog; el boton dice que falta)
+        $('btnNuevaTarea').click(); await esperar(() => $('dlgNueva').open, 'diálogo nueva tarea');
+        R.ok('crear: el diálogo abre con el botón diciendo qué falta', $('ntGuardar').disabled && $('ntGuardar').textContent === 'Falta el título', $('ntGuardar').textContent);
+        R.ok('crear: nace en la primera cubeta y asignada a mí', $('ntColumna').value === 'por-hacer' && $('ntAsignado').value === yo.toLowerCase(), `${$('ntColumna').value} · ${$('ntAsignado').value}`);
+        poner('ntTitulo', 'informe de prueba');
+        R.ok('crear: el título va en MAYÚSCULAS mientras se teclea (como Proyectos v0.107.0)', $('ntTitulo').value === 'INFORME DE PRUEBA', $('ntTitulo').value);
+        R.ok('crear: con título el botón dice «Crear tarea»', !$('ntGuardar').disabled && $('ntGuardar').textContent === 'Crear tarea');
+        poner('ntVence', '31/02/2026');
+        R.ok('crear: una fecha que no existe → el botón la pide', $('ntGuardar').disabled && /fecha válida/.test($('ntGuardar').textContent), $('ntGuardar').textContent);
+        const vence10 = dia(10).slice(0, 10);
+        poner('ntVence', ddmm(vence10)); poner('ntAsignado', 'colega@example.invalid'); poner('ntPrioridad', 'alta'); poner('ntDesc', 'Descripción de prueba');
+        const nAntes = filas('tareas').length;
+        $('formNueva').requestSubmit();
+        await esperar(() => !$('dlgNueva').open && filas('tareas').length === nAntes + 1, 'tarea creada');
+        const nueva = tarea('INFORME DE PRUEBA');
+        R.ok('crear: POST a PROY_Tareas con los campos de Proyectos', !!nueva && nueva.fields.ProyectoId === lauP.id && nueva.fields.Columna === 'por-hacer' && nueva.fields.Asignado === 'colega@example.invalid' && nueva.fields.Prioridad === 'alta' && String(nueva.fields.Vence).startsWith(vence10) && !!nueva.fields.Desde && nueva.fields.Orden === 6 && nueva.fields.Descripcion === 'Descripción de prueba', JSON.stringify(nueva && nueva.fields));
+        R.ok('crear: AsignadoPor = quien la crea (la lista tiene la columna)', nueva.fields.AsignadoPor === yo.toLowerCase(), nueva.fields.AsignadoPor);
+        R.ok('crear: cada campo escrito existe en esquema.json (PROY_Tareas)', enEsquema(nueva.fields, 'PROY_Tareas').length === 0, enEsquema(nueva.fields, 'PROY_Tareas').join(','));
+        await esperar(() => actividad('crear-tarea').length === 1, 'bitácora crear-tarea');
+        const aC = actividad('crear-tarea')[0].fields;
+        R.ok('crear: PROY_Actividad crear-tarea con la frase de Proyectos', aC.Title === 'creó «INFORME DE PRUEBA» para Colega Demo' && aC.Quien === yo && aC.ProyectoId === lauP.id && aC.TareaId === nueva.id && !!aC.Cuando, JSON.stringify(aC));
+        R.ok('crear: el renglón de bitácora usa solo columnas de esquema.json (PROY_Actividad)', enEsquema(aC, 'PROY_Actividad').length === 0);
+        await esperar(() => colDe('INFORME DE PRUEBA'), 'tarjeta nueva en el tablero');
+        R.ok('crear: la tarjeta aparece en su cubeta y el aviso lo dice', colDe('INFORME DE PRUEBA') === 'por-hacer' && !!avisoCon('Tarea creada en Por hacer'));
+
+        // 10.2 Mover desde la ficha (la via del celular)
+        tarjetaDe('Esta semana mía').click(); await esperar(() => $('dlgFicha').open, 'ficha');
+        R.ok('ficha: «Mover a» con las 4 cubetas y la actual deshabilitada', $('fMover').querySelectorAll('button').length === 4 && $('fMover').querySelector('[data-move="por-hacer"]').disabled && /actual/.test($('fMover').querySelector('[data-move="por-hacer"]').textContent));
+        let ifm = DB.ifMatch;
+        $('fMover').querySelector('[data-move="en-curso"]').click();
+        await esperar(() => tarea('Esta semana mía').fields.Columna === 'en-curso' && !$('dlgFicha').open, 'movida por la ficha');
+        const mv = tarea('Esta semana mía').fields;
+        R.ok('mover (ficha): PATCH con If-Match, Desde nuevo y sin sello de hecho', DB.ifMatch === ifm + 1 && !!mv.Desde && !mv.HechoPor && !mv.HechoEl, `ifMatch +${DB.ifMatch - ifm}`);
+        await esperar(() => actividad('mover-tarea').length === 1, 'bitácora mover');
+        R.ok('mover: PROY_Actividad mover-tarea «movió … de Por hacer a En curso»', actividad('mover-tarea')[0].fields.Title === 'movió «Esta semana mía» de Por hacer a En curso' && actividad('mover-tarea')[0].fields.TareaId === tarea('Esta semana mía').id, actividad('mover-tarea')[0].fields.Title);
+        R.ok('mover: el tablero la pinta en su nueva cubeta', colDe('Esta semana mía') === 'en-curso');
+
+        // 10.3 Mover arrastrando (escritorio) — a Hecho sella HechoPor/HechoEl; de vuelta, se limpia
+        { const dt = new DataTransfer(); const c = tarjetaDe('Para hoy mía'); const destino = document.querySelector('#kanban .kcol[data-columna="hecho"]');
+          c.dispatchEvent(new DragEvent('dragstart', { dataTransfer: dt, bubbles: true }));
+          destino.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true }));
+          R.ok('arrastrar: la cubeta destino se resalta', destino.classList.contains('recibe'));
+          destino.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true })); }
+        await esperar(() => tarea('Para hoy mía').fields.Columna === 'hecho', 'movida arrastrando');
+        R.ok('arrastrar a Hecho: sella HechoPor/HechoEl', tarea('Para hoy mía').fields.HechoPor === yo && !!tarea('Para hoy mía').fields.HechoEl);
+        await esperar(() => colDe('Para hoy mía') === 'hecho', 'repintado');
+        tarjetaDe('Para hoy mía').click(); await esperar(() => $('dlgFicha').open, 'ficha de la hecha');
+        $('fMover').querySelector('[data-move="en-curso"]').click();
+        await esperar(() => tarea('Para hoy mía').fields.Columna === 'en-curso', 'de vuelta');
+        R.ok('salir de Hecho limpia HechoPor/HechoEl (null borra la celda)', !('HechoPor' in tarea('Para hoy mía').fields) && !('HechoEl' in tarea('Para hoy mía').fields));
+        await esperar(() => actividad('mover-tarea').length === 3, 'tres mover-tarea');
+        R.ok('PROY_Actividad: 3 mover-tarea', actividad('mover-tarea').length === 3);
+
+        // 10.4 Editar en la ficha: titulo, asignado, vence y prioridad en UN PATCH con If-Match
+        await esperar(() => tarjetaDe('Más adelante mía') && !$('dlgFicha').open, 'tablero repintado');
+        tarjetaDe('Más adelante mía').click(); await esperar(() => $('dlgFicha').open, 'ficha a editar');
+        R.ok('ficha: sin cambios el botón lo dice', $('fGuardar').disabled && $('fGuardar').textContent === 'Sin cambios' && !$('fGuardar').classList.contains('oculto'));
+        const id4 = tarea('Más adelante mía').id; const vence5 = dia(5).slice(0, 10);
+        poner('fTitulo', 'Más adelante editada'); poner('fAsignado', 'colega@example.invalid'); poner('fPrioridad', 'baja'); poner('fVence', ddmm(vence5));
+        R.ok('ficha: con cambios dice «Guardar cambios»', !$('fGuardar').disabled && $('fGuardar').textContent === 'Guardar cambios');
+        poner('fTitulo', '');
+        R.ok('ficha: sin título el botón lo pide', $('fGuardar').disabled && $('fGuardar').textContent === 'Falta el título');
+        poner('fTitulo', 'Más adelante editada');
+        ifm = DB.ifMatch;
+        $('formFicha').requestSubmit();
+        await esperar(() => filas('tareas').find(x => x.id === id4).fields.Title === 'Más adelante editada', 'editada');
+        const ed = filas('tareas').find(x => x.id === id4).fields;
+        R.ok('editar: un PATCH con If-Match con los 4 campos (y AsignadoPor)', DB.ifMatch === ifm + 1 && ed.Asignado === 'colega@example.invalid' && ed.Prioridad === 'baja' && String(ed.Vence).startsWith(vence5) && ed.AsignadoPor === yo.toLowerCase(), JSON.stringify(DB.ultimoPatch.tareas));
+        R.ok('editar: solo viaja lo que cambió (cotejado contra esquema.json)', Object.keys(DB.ultimoPatch.tareas).sort().join(',') === 'Asignado,AsignadoPor,Prioridad,Title,Vence' && enEsquema(DB.ultimoPatch.tareas, 'PROY_Tareas').length === 0, Object.keys(DB.ultimoPatch.tareas).join(','));
+        await esperar(() => actividad('editar-tarea').length === 1, 'bitácora editar');
+        R.ok('editar: PROY_Actividad editar-tarea «asignó … a Colega Demo»', actividad('editar-tarea')[0].fields.Title === 'asignó «Más adelante editada» a Colega Demo', actividad('editar-tarea')[0].fields.Title);
+        R.ok('editar: la ficha sigue abierta, repintada y sin cambios pendientes', $('dlgFicha').open && $('fCab').textContent === 'Más adelante editada' && $('fGuardar').textContent === 'Sin cambios');
+
+        // 10.5 412: alguien cambió la tarjeta entre la lectura y el Guardar → no se pisa, se relee y la ficha trae lo nuevo
+        { const it = filas('tareas').find(x => x.id === id4); it.etag = (it.etag || 1) + 1; it.fields.Title = 'Cambiada por alguien más'; }
+        poner('fPrioridad', 'alta'); ifm = DB.ifMatch;
+        $('formFicha').requestSubmit();
+        await esperar(() => avisoCon('Alguien cambió'), '412 avisado');
+        const it412 = filas('tareas').find(x => x.id === id4).fields;
+        R.ok('412: el PATCH llevó If-Match y no pisó el cambio ajeno', DB.ifMatch === ifm + 1 && it412.Prioridad === 'baja' && it412.Title === 'Cambiada por alguien más', `${it412.Prioridad} · ${it412.Title}`);
+        R.ok('412: se releyó y la ficha abierta muestra lo nuevo', $('dlgFicha').open && $('fTitulo').value === 'Cambiada por alguien más' && $('fPrioridad').value === 'baja', `${$('fTitulo').value} · ${$('fPrioridad').value}`);
+        R.ok('412: sin «editó» en la bitácora', actividad('editar-tarea').length === 1);
+        poner('fPrioridad', 'alta'); $('formFicha').requestSubmit();
+        await esperar(() => filas('tareas').find(x => x.id === id4).fields.Prioridad === 'alta', 'segundo intento tras el 412');
+        R.ok('412: el segundo intento pasa con el candado nuevo', filas('tareas').find(x => x.id === id4).fields.Title === 'Cambiada por alguien más');
+        // y al mover: el 412 tampoco pisa
+        await dormir(60);
+        { const it = filas('tareas').find(x => x.id === id4); it.etag = (it.etag || 1) + 1; }
+        $('fMover').querySelector('[data-move="hecho"]').click();
+        await esperar(() => avisoCon('Alguien cambió'), '412 al mover');
+        R.ok('412 al mover: no se movió y sin mover-tarea nuevo', filas('tareas').find(x => x.id === id4).fields.Columna === 'en-revision' && actividad('mover-tarea').length === 3);
+
+        // 10.6 Borrar: solo gerencia, en dos toques
+        if (ROL === 'gerencia') {
+            R.ok('borrar (gerencia): el botón se ve', !$('fBorrar').classList.contains('oculto'));
+            $('fBorrar').click();
+            R.ok('borrar: el primer toque solo arma', /Toca otra vez/.test($('fBorrar').textContent) && !!filas('tareas').find(x => x.id === id4));
+            $('fBorrar').click();
+            await esperar(() => !filas('tareas').find(x => x.id === id4) && !$('dlgFicha').open, 'borrada');
+            await esperar(() => actividad('borrar-tarea').length === 1, 'bitácora borrar');
+            const del = escrituras().filter(c => c.startsWith('DELETE'));
+            R.ok('borrar: DELETE en PROY_Tareas y borrar-tarea en la bitácora, sin TareaId', del.length === 1 && del[0].includes('/lists/lista-tareas/items/' + id4) && actividad('borrar-tarea')[0].fields.Title === 'borró «Cambiada por alguien más»' && !('TareaId' in actividad('borrar-tarea')[0].fields), del.join(' | '));
+        } else {
+            R.ok('borrar (colaborador): el botón no se ve', $('fBorrar').classList.contains('oculto'));
+            $('fCerrar').click(); await esperar(() => !$('dlgFicha').open, 'ficha cerrada');
+            const nB = filas('tareas').length; TJ.abrirFicha(id4); $('fBorrar').click(); $('fBorrar').click(); await dormir(60);
+            R.ok('borrar (colaborador): aunque se fuerce el botón, no borra', filas('tareas').length === nB && !escrituras().some(c => c.startsWith('DELETE')));
+            $('fCerrar').click();
+        }
+        R.ok('ninguna escritura fuera de PROY_Tareas y PROY_Actividad', escrituras().every(c => ['tareas', 'actividad'].some(k => c.includes('/lists/lista-' + k + '/'))), escrituras().join(' | '));
+    } else {
+        // 10.7 Rol lectura: ve todo, no escribe nada — ni forzando
+        R.ok('lectura: la nota del tablero lo dice', /rol es de lectura/.test($('notaTablero').textContent));
+        R.ok('lectura: ninguna tarjeta se arrastra', [...document.querySelectorAll('#kanban .kc')].every(c => !c.draggable));
+        tarjetaDe('Esta semana mía').click(); await esperar(() => $('dlgFicha').open, 'ficha (lectura)');
+        R.ok('lectura: la ficha abre con todo deshabilitado, sin Guardar, sin Mover ni Borrar', ['fTitulo', 'fAsignado', 'fVence', 'fPrioridad'].every(id => $(id).disabled) && $('fGuardar').classList.contains('oculto') && $('fMoverCaja').classList.contains('oculto') && $('fBorrar').classList.contains('oculto') && !$('fSoloLectura').classList.contains('oculto'));
+        $('fTitulo').value = 'Forzado'; $('formFicha').requestSubmit(); await dormir(60);
+        R.ok('lectura: forzar Guardar → se niega y lo dice', !!avisoCon('rol es de lectura') && !!tarea('Esta semana mía'), avisoCon('rol es de lectura')?.textContent);
+        $('fCerrar').click(); await esperar(() => !$('dlgFicha').open, 'ficha cerrada');
+        const t = tarea('Esta semana mía');
+        const movio = await TJ.moverTarea(t.id, 'hecho');
+        R.ok('lectura: forzar mover → se niega', movio === false && t.fields.Columna === 'por-hacer' && !!avisoCon('no puedes mover'));
+        { const dt = new DataTransfer(); dt.setData('text/plain', String(t.id)); document.querySelector('#kanban .kcol[data-columna="hecho"]').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true })); await dormir(60); }
+        R.ok('lectura: soltar sobre una cubeta no hace nada', t.fields.Columna === 'por-hacer');
+        TJ.abrirNuevaTarea({ ...lauP.fields, id: lauP.id }); await dormir(30);
+        R.ok('lectura: forzar «Nueva tarea» → no abre el diálogo', !$('dlgNueva').open && !!avisoCon('no puedes crear'));
+        R.ok('lectura: CERO escrituras en toda la corrida', escrituras().length === 0, escrituras().join(' | '));
+    }
+    for (const d of document.querySelectorAll('dialog[open]')) d.close();
 } catch (e) {
     R.ok('el escenario corrio sin excepcion', false, e && e.stack ? e.stack : String(e));
 }
