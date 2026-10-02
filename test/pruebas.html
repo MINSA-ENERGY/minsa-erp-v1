@@ -2,10 +2,10 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<title>Pruebas de extremo a extremo — MINSA ERP (esqueleto)</title>
+<title>Pruebas de extremo a extremo — MINSA ERP</title>
 <!-- ERP v0.1.0. Corre la app REAL (index.html + app.js) contra un Graph FALSO en memoria y un MSAL falso.
      El MSAL falso, el Graph falso y la bitacora son COPIA LITERAL de minsa-proyectos-app/app/test/pruebas.html
-     (v0.160.0, lineas 35-256); los escenarios de abajo son los del esqueleto: entrar y leer las listas PROY_*.
+     (v0.160.0, lineas 35-256); los escenarios de abajo son los de v0.2.0: armazon, Inicio · Mis pendientes, Proyectos, el kanban y las «en construcción».
      Los ~2,800 renglones de escenarios de Proyectos prueban sus VISTAS (tablero, docs, chat, capital...), que no se
      trajeron; vuelven por pantalla en la fase 4. Sin CSP a proposito (herramienta de desarrollo, _config.yml la
      excluye de Pages). Se corre desde app/ con `npm run test:e2e` (PowerShell + Edge headless, 3 roles). -->
@@ -253,7 +253,10 @@ async function esperar(fn, que, ms = 8000) {
     while (Date.now() - t0 < ms) { try { const v = fn(); if (v) return v; } catch (_) {} await dormir(25); }
     throw new Error('tiempo agotado esperando: ' + que);
 }
-const fila = nombre => document.querySelector(`#listas li[data-lista="${nombre}"] .n`)?.textContent;
+const vista = () => $('vista');
+const pantalla = () => vista().dataset.pantalla;
+async function irA(h, que) { location.hash = h; await esperar(() => pantalla() === que && location.hash === h, 'pantalla ' + que + ' en ' + h); await dormir(30); }
+const textos = sel => [...document.querySelectorAll(sel)].map(n => n.textContent.trim());
 
 try {
     // 1. Montar la app real dentro de esta pagina (igual que el arnes de Proyectos).
@@ -265,30 +268,113 @@ try {
     for (const href of ['./minsa-ui.css', './estilo.css']) { const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = href; document.head.appendChild(link); }
     const esquema = await (await fetch('./esquema.json', { cache: 'reload' })).json();
     window.__sembrar(esquema, ROL);
-    // Un proyecto y dos tareas, para que el conteo no sea solo de listas vacias.
-    DB.listas.proyectos.items.push({ id: DB.siguienteId++, fields: { Title: 'LAU CALYTEK', Clave: 'lau-demo' } });
-    for (const t of ['Tarea uno', 'Tarea dos']) DB.listas.tareas.items.push({ id: DB.siguienteId++, fields: { Title: t } });
-    // Con rol lectura se prueba ademas la tolerancia a PROY_Capital ausente (Proyectos la tolera; el esqueleto tambien).
-    const sinCapital = ROL === 'lectura';
-    if (sinCapital) delete DB.listas.capital;
+    try { localStorage.removeItem('erp.tema'); } catch (_) {}
+    // v0.2.0: datos falsos de las pantallas. Fechas en el dia de MEXICO (el reloj de diasPara), a mediodia de alla (18:00Z).
+    const yo = window.__CUENTA.username;
+    const hoyMx = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const dia = n => { const f = new Date(hoyMx + 'T18:00:00Z'); f.setUTCDate(f.getUTCDate() + n); return f.toISOString().slice(0, 10) + 'T18:00:00Z'; };
+    const P = (fields) => { const id = DB.siguienteId++; DB.listas.proyectos.items.push({ id, fields }); return id; };
+    const lau = P({ Title: 'LAU CALYTEK', Clave: 'lau-demo', Equipo: 'CALYTEK', Estado: 'activo', Vence: dia(20), Responsable: 'jefa@example.invalid', Descripcion: 'Entregables para el gestor externo (demo).' });
+    const pit = P({ Title: 'Servicio PITEPEC', Clave: 'pitepec-demo', Equipo: 'PITEPEC', Estado: 'activo', Columnas: JSON.stringify([{ clave: 'pendiente', nombre: 'Pendiente' }, { clave: 'haciendo', nombre: 'Haciendo' }, { clave: 'hecho', nombre: 'Listo' }]) });
+    P({ Title: 'Frente viejo', Clave: 'viejo-demo', Equipo: 'RABASA', Estado: 'cerrado' });
+    const XSS = '<img src=x onerror="window.__xss=1">Tarea con etiqueta';
+    const T = (Title, ProyectoId, Columna, Asignado, Vence, extra = {}) => DB.listas.tareas.items.push({ id: DB.siguienteId++, fields: { Title, ProyectoId, Columna, Asignado, ...(Vence !== null ? { Vence } : {}), Prioridad: 'normal', ...extra } });
+    T('Vencida mía', lau, 'por-hacer', yo, dia(-3), { Prioridad: 'alta' });
+    T('Para hoy mía', lau, 'en-curso', yo, dia(0));
+    T('Esta semana mía', lau, 'por-hacer', yo, dia(4));
+    T('Más adelante mía', lau, 'en-revision', yo, dia(30));
+    T('Sin fecha mía', lau, 'por-hacer', yo, null);
+    T(XSS, lau, 'por-hacer', yo, null);
+    T('Hecha mía', lau, 'hecho', yo, dia(-1));
+    T('De la colega', lau, 'en-revision', 'colega@example.invalid', dia(2));
+    T('Sin dueño', lau, 'por-hacer', '', null);
+    T('En cubeta borrada', lau, 'cubeta-que-ya-no-existe', yo, null);
+    T('Haciendo PITEPEC', pit, 'haciendo', yo, dia(2));
+    T('Listo PITEPEC', pit, 'hecho', 'colega@example.invalid', null);
+    // Con rol lectura se prueba ademas que PROY_Capital ausente no estorba (v0.2.0 ya no la lee).
+    if (ROL === 'lectura') delete DB.listas.capital;
 
     // 2. Arrancar la app: el MSAL falso «vuelve del login» y la sesion se abre sola.
     await import('./app.js');
     await esperar(() => !$('pantallaSesion').classList.contains('oculto'), 'pantalla de sesion', 15000);
+    await esperar(() => pantalla(), 'primera pantalla');
     R.ok('entra con MSAL y oculta la entrada', $('pantallaEntrar').classList.contains('oculto'));
-    R.ok('titulo del esqueleto', $('titulo').textContent === 'ERP — esqueleto v0.1.0', $('titulo').textContent);
-    R.ok('pie con la version', $('pie').textContent === 'MINSA ERP v0.1.0', $('pie').textContent);
-    R.ok('rol leido de PROY_Roles', $('quien').textContent.endsWith(' · ' + ROL), $('quien').textContent);
-    R.ok('nombre de PROY_Roles, no el correo', $('quien').textContent.startsWith('Persona de Prueba'), $('quien').textContent);
+    R.ok('pie con la version', $('pie').textContent === 'MINSA ERP v0.2.0', $('pie').textContent);
+    R.ok('nombre de PROY_Roles, no el correo', $('quien').textContent === 'Persona de Prueba', $('quien').textContent);
+    R.ok('rol leido de PROY_Roles', $('rolQuien').textContent === ROL, $('rolQuien').textContent);
+    R.ok('lee las 3 listas que pinta', ['PROY_Proyectos', 'PROY_Tareas', 'PROY_Roles'].every(n => DB.llamadas.some(c => c.includes('/lists/lista-' + esquema.listas.find(l => l.nombre === n).clave + '/items'))), DB.llamadas.join(' | '));
 
-    // 3. El motor leyo las listas PROY_* del sitio Administracion.
-    R.ok('abre el sitio Administracion', DB.llamadas.some(c => c === 'GET /sites/minsaenergy.sharepoint.com:/sites/Administracion'), DB.llamadas[0]);
-    R.ok('pinta las 6 listas de config.js', document.querySelectorAll('#listas li').length === 6, String(document.querySelectorAll('#listas li').length));
-    R.ok('PROY_Roles: 3 renglones', fila('PROY_Roles') === '3 renglones', fila('PROY_Roles'));
-    R.ok('PROY_Proyectos: 1 renglón', fila('PROY_Proyectos') === '1 renglón', fila('PROY_Proyectos'));
-    R.ok('PROY_Tareas: 2 renglones', fila('PROY_Tareas') === '2 renglones', fila('PROY_Tareas'));
-    R.ok('PROY_Capital ausente se tolera', fila('PROY_Capital') === (sinCapital ? 'no existe' : '0 renglones'), fila('PROY_Capital'));
-    R.ok('el esqueleto no escribe nada', !DB.llamadas.some(c => /^(POST|PATCH|PUT|DELETE) /.test(c)), DB.llamadas.filter(c => !c.startsWith('GET ')).join(' | '));
+    // 3. Armazon: rail de la maqueta.
+    R.ok('rail: los 5 destinos de la maqueta', textos('#destinos .navb .txt').join(',') === 'Inicio,Proyectos,Archivos,Gastos,Equipo', textos('#destinos .navb .txt').join(','));
+    R.ok('rail: Planta y Tablero «próximamente», deshabilitados', [...document.querySelectorAll('.mn-rail .pronto')].length === 2 && [...document.querySelectorAll('.mn-rail .pronto')].every(b => b.disabled && /próximamente/.test(b.textContent)));
+    R.ok('sin hash arranca en Inicio', pantalla() === 'inicio', pantalla());
+    R.ok('Inicio marcado en el rail (aria-current)', document.querySelector('#destinos [aria-current="page"]')?.dataset.destino === 'inicio');
+    const hot = document.querySelector('[data-destino="inicio"] .mn-rail-hot');
+    R.ok('contador del rail = mis abiertas (8)', !hot.hidden && hot.textContent === '8', hot.textContent);
+
+    // 4. Inicio · Mis pendientes
+    R.ok('saludo con el nombre de pila', /^(Buenos días|Buenas tardes|Buenas noches), Persona$/.test(vista().querySelector('h1').textContent), vista().querySelector('h1').textContent);
+    const grupos = [...document.querySelectorAll('#misPendientes .grupo')].map(g => `${g.dataset.grupo}:${g.querySelectorAll('.fila').length}`).join(' ');
+    R.ok('pendientes agrupados por vencimiento', grupos === 'vencidas:1 hoy:1 semana:2 despues:1 sin-fecha:3', grupos);
+    R.ok('el total de la tarjeta = contador del rail', document.querySelector('#misPendientes .card-cab .mn-chip').textContent === hot.textContent);
+    R.ok('ni la hecha ni la de la colega', !textos('#misPendientes .titulo').some(t => t === 'Hecha mía' || t === 'De la colega'));
+    R.ok('vencida con chip rojo y prioridad alta', !!document.querySelector('#misPendientes [data-grupo="vencidas"] .mn-chip.is-danger'));
+    R.ok('el proyecto de cada pendiente se nombra', textos('#misPendientes [data-grupo="semana"] .meta .muted').join('|') === 'Servicio PITEPEC|LAU CALYTEK', textos('#misPendientes [data-grupo="semana"] .meta .muted').join('|'));
+    { const f = document.querySelector('#misPendientes [data-grupo="vencidas"] .fila'); const hoja = f.querySelector('.dia b').textContent; const ch = f.querySelector('.meta .mn-chip').textContent.replace(/\u00a0/g, ' ');
+      R.ok('la hoja de calendario y el chip dicen el mismo día', ch === `venció ${hoja} ${f.querySelector('.dia .mes').textContent.toLowerCase()}`, `${hoja} vs ${ch}`); }
+    R.ok('un título con HTML se pinta como texto', textos('#misPendientes .titulo').includes(XSS) && !vista().querySelector('img') && !window.__xss);
+    R.ok('Inicio: proyectos activos (2)', document.querySelectorAll('#inicioProyectos .pcard').length === 2);
+
+    // 5. De un pendiente a su proyecto
+    document.querySelector('#misPendientes [data-grupo="vencidas"] .fila').click();
+    await esperar(() => pantalla() === 'proyecto', 'abrir el proyecto desde Inicio');
+    R.ok('el pendiente abre su proyecto (#p/<clave>)', location.hash === '#p/lau-demo' && $('tituloProyecto').textContent === 'LAU CALYTEK', location.hash);
+    R.ok('Proyectos marcado en el rail dentro de un proyecto', document.querySelector('#destinos [aria-current="page"]')?.dataset.destino === 'proyectos');
+
+    // 6. Proyecto: kanban de solo lectura
+    const cols = () => [...document.querySelectorAll('#kanban .kcol')].map(c => `${c.querySelector('h2').textContent}:${c.querySelectorAll('.kc').length}`).join(' ');
+    R.ok('kanban: cubetas default + «Sin cubeta»', cols() === 'Por hacer:5 En curso:1 En revisión:2 Hecho:1 Sin cubeta:1', cols());
+    R.ok('kanban: la tarjeta lleva quién (nombre corto) e iniciales', [...document.querySelectorAll('#kanban .kc')].some(c => /Colega/.test(c.textContent) && c.querySelector('.av')?.textContent === 'CD'));
+    R.ok('kanban: la tarjeta sin asignar dice «sin dueño»', !!document.querySelector('#kanban .kc .sin-dueno'));
+    R.ok('kanban: orden, alta primero en «Por hacer»', document.querySelector('#kanban .k-por-hacer .kc .titulo').textContent === 'Vencida mía');
+    R.ok('kanban: el botón dice qué falta y no hace nada', !!document.querySelector('.cabecera .btn.incompleto[disabled]'));
+    R.ok('kanban: responsable por nombre', /Responsable: Jefa Demo/.test(vista().textContent));
+    await irA('#p/pitepec-demo', 'proyecto');
+    R.ok('kanban: cubetas propias del proyecto (Columnas)', cols() === 'Pendiente:0 Haciendo:1 Listo:1', cols());
+    R.ok('kanban: cubeta vacía lo dice', /Nada aquí todavía/.test(document.querySelector('#kanban .kcol').textContent));
+
+    // 7. Proyectos
+    document.querySelector('[data-destino="proyectos"]').click();
+    await esperar(() => pantalla() === 'proyectos', 'Proyectos desde el rail');
+    R.ok('rail → #proyectos', location.hash === '#proyectos', location.hash);
+    R.ok('Proyectos: activos ordenados por vence (los sin fecha al final)', textos('#listaProyectos .pcard .nombre').join('|') === 'LAU CALYTEK|Servicio PITEPEC', textos('#listaProyectos .pcard .nombre').join('|'));
+    R.ok('Proyectos: cerrados plegados aparte', $('proyectosCerrados') && !$('proyectosCerrados').open && $('proyectosCerrados').querySelectorAll('.pcard').length === 1);
+    const nums = textos('#listaProyectos .pcard[data-clave="lau-demo"] .n b').join(',');
+    R.ok('Proyectos: por hacer / en curso / hechas', nums === '6,3,1', nums);
+    await irA('#p/nadie', 'proyecto');
+    R.ok('una clave que no existe lo dice', /No encontré ese proyecto/.test(vista().textContent));
+
+    // 8. Las «en construcción» son honestas
+    for (const [h, palabra] of [['#archivos', 'Archivos'], ['#gastos', 'Gastos'], ['#equipo', 'Equipo']]) {
+        await irA(h, h.slice(1));
+        R.ok(`${palabra}: en construcción, con lo que falta`, vista().querySelector('h1').textContent === palabra && /en construcción/.test($('enConstruccion').textContent) && !!$('enConstruccion').querySelector('.btn.incompleto[disabled]'));
+    }
+    R.ok('Equipo: las personas activas de PROY_Roles', $('enConstruccion').querySelectorAll('.personas li').length === 3);
+    await irA('#cualquier-cosa', 'inicio');
+    R.ok('un hash desconocido cae en Inicio', pantalla() === 'inicio');
+
+    // 9. Tema claro / oscuro
+    const raiz = document.documentElement;
+    $('temaOscuro').click();
+    R.ok('tema oscuro: data-theme=dark y el botón encendido', raiz.dataset.theme === 'dark' && $('temaOscuro').classList.contains('on'));
+    R.ok('tema oscuro: la página cambia de fondo', getComputedStyle(document.body).backgroundColor === 'rgb(11, 18, 32)', getComputedStyle(document.body).backgroundColor);
+    $('temaClaro').click();
+    R.ok('tema claro: data-theme=light', raiz.dataset.theme === 'light' && getComputedStyle(document.body).backgroundColor === 'rgb(247, 248, 250)', getComputedStyle(document.body).backgroundColor);
+    let guardado = null; try { guardado = localStorage.getItem('erp.tema'); } catch (_) {}
+    R.ok('el tema se recuerda en el dispositivo', guardado === 'light', String(guardado));
+    delete raiz.dataset.theme; try { localStorage.removeItem('erp.tema'); } catch (_) {}
+
+    R.ok('v0.2.0 no escribe nada', !DB.llamadas.some(c => /^(POST|PATCH|PUT|DELETE) /.test(c)), DB.llamadas.filter(c => !c.startsWith('GET ')).join(' | '));
     R.ok('sin avisos de error', !document.querySelector('#avisos .mensaje.error'), document.querySelector('#avisos')?.textContent);
 } catch (e) {
     R.ok('el escenario corrio sin excepcion', false, e && e.stack ? e.stack : String(e));

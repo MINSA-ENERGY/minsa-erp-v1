@@ -5,7 +5,7 @@
 import { CONFIG } from './config.js';
 import { PUEDE, nombreDe, nombreCorto, diasPara, diaDe, estadoVence, tipoArchivo, trozosConMenciones, columnasDe, leerVisto, fundirVisto, marcaFiable, vistosDe, aliasParaMencion, activosDe, proyectosVisibles , fechaMexico } from './reglas.js';
 
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 export const $ = id => document.getElementById(id);
 export const L = CONFIG.listas;
 /** C-13 (v0.95.0): el filtro de tarjetas vacio, en UN lugar — su forma ya cambio dos veces (quien paso a arreglo en v0.30.0, se sumo
@@ -405,7 +405,9 @@ const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'o
  *  laptop en ingles) y <html lang="es"> no lo cambia; esta linea dice en el formato de la casa lo
  *  que quedo escrito. */
 /** v0.25.0: la fecha como hoja de calendario —{ mes: 'oct', dia: 31 }— en el dia de Mexico (diaDe); null sin fecha. */
-export function mesDia(iso) { const s = diaInput(diaDe(iso) || iso); if (!s) return null; return { mes: MESES[+s.slice(5, 7) - 1], dia: +s.slice(8, 10) }; }
+// ERP v0.2.0: un dia suelto (YYYY-MM-DD) ya es de Mexico; pasarlo otra vez por diaDe (medianoche UTC) lo corria un dia atras
+// y fechaVence decia «venció 27 sep» de una tarjeta del 28 (el bug viene de Proyectos v0.160.0).
+export function mesDia(iso) { const s = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(String(iso || '')) ? String(iso) : diaInput(diaDe(iso) || iso); if (!s) return null; return { mes: MESES[+s.slice(5, 7) - 1], dia: +s.slice(8, 10) }; }
 /** U-40 (v0.141.0): «26 sep», como la columna Vence de la Lista; el año solo si no es el año en curso. */
 export function fechaVence(iso) {
     const s = diaInput(diaDe(iso) || iso); if (!s) return fechaCorta(iso);
