@@ -1,4 +1,4 @@
-# MINSA ERP — app (v0.3.0, fase 4: escrituras del kanban)
+# MINSA ERP — app (v0.4.0, fase 4: escrituras del kanban)
 
 PWA del ERP de MINSA ENERGY (`erp.minsaenergy.com`). Sustituirá a MINSA Proyectos: mismo login de Entra
 (se **reusa su app registration**), mismas listas `PROY_*` del sitio Administración, cara nueva. El plan vive en
@@ -67,7 +67,7 @@ Lee `PROY_Proyectos`, `PROY_Tareas` y `PROY_Roles` (y las columnas reales de `PR
 
 ```
 npm test            # piel al día, selectores, comentarios, reglas (214), lote (27), sw, datos
-npm run test:e2e    # PowerShell + Edge headless, 3 roles: v0.3.0 = gerencia 82 · colaborador 81 · lectura 53
+npm run test:e2e    # PowerShell + Edge headless, 3 roles: v0.4.0 = gerencia 83 · colaborador 82 · lectura 54
 node ../herramientas-dev/capturas.mjs --salida ../docs/capturas/v<versión>   # 390/1366 × claro/oscuro, mide desborde
 ```
 
@@ -106,3 +106,12 @@ oscuro, para **gerencia y colaborador** (32 PNG; `_mediciones.txt`: overflowX = 
 medición ya incluye el diálogo abierto). Mismo Graph falso: ningún dato real. Las fotos son del estado DESPUÉS de la E2E
 (por eso aparecen «INFORME DE PRUEBA» y «Cambiada por alguien más»). `herramientas-dev/capturas.mjs` suma las vistas
 `nueva` y `ficha`.
+
+## v0.4.0 (2026-10-01) — decisiones de Carlos al cierre de v0.3.0
+
+- **Sin iniciales en las tarjetas del kanban**: solo el nombre corto. Carlos quitó los avatares de toda la app de Proyectos
+  en su v0.61.0 («no me gusta como se ve»). `iniciales()` sigue en `reglas.js` (probada) por si el chat la pide.
+  Revertir: devolver el `span.av` en `tarjetaKanban` (`pantallas.js`) y la regla `.av` de `estilo.css`.
+- **En celular, Tema y Salir dentro de «···»** arriba a la derecha (como `Celular.dc.html` de la maqueta): abajo de 720 px
+  el rail con Salir se oculta y no había cómo cerrar sesión en un celular compartido. Es un `<details>` que se cierra al
+  elegir, al tocar fuera o con Esc. Capturas a 390 px en `../docs/capturas/v0.4.0/` (vista `mas` = menú abierto).

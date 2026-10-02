@@ -1,4 +1,4 @@
-// ERP de MINSA ENERGY — v0.3.0 (fase 4 del plan, docs/plan.md: v0.3.0 suma las escrituras del kanban, tarjetas.js). Sustituira a MINSA Proyectos.
+// ERP de MINSA ENERGY — v0.4.0 (fase 4 del plan, docs/plan.md; v0.4.0: sin iniciales en el kanban y «···» con Tema/Salir en celular; v0.3.0 sumó las escrituras del kanban, tarjetas.js). Sustituira a MINSA Proyectos.
 //
 // Entrada con Entra (MSAL por REDIRECCION, token en sessionStorage: la misma secuencia de Proyectos v0.160.0), lectura de
 // PROY_Proyectos / PROY_Tareas / PROY_Roles con el motor traido (graph.js + reglas.js + comun.js), y el ARMAZON: rail que en
@@ -8,7 +8,7 @@
 
 import { CONFIG } from './config.js';
 import { crearCliente } from './graph.js';
-import { rolDe, nombreDe, misAbiertas, iniciales } from './reglas.js';
+import { rolDe, nombreDe, misAbiertas } from './reglas.js';
 import { $, L, VERSION, estado, el, avisar, fijarHash, iconoSvg, proyectoPorClave, fijarReleer } from './comun.js';
 import { pintarInicio, pintarProyectos, pintarProyecto, pintarEnConstruccion, pintarNoEncontrado } from './pantallas.js';
 import { engancharTarjetas, alCambiarTareas } from './tarjetas.js';
@@ -179,7 +179,6 @@ async function sesionIniciada() {
     estado.rol = rolDe(estado.cuenta.username, estado.roles);
     $('quien').textContent = nombreDe(estado.cuenta.username, estado.roles);
     $('quien').title = estado.cuenta.username;
-    $('quien').dataset.iniciales = iniciales(estado.cuenta.username);
     $('rolQuien').textContent = estado.rol;
     armarRail(); contadores();
     estado.sesion = true;
@@ -190,6 +189,11 @@ async function sesionIniciada() {
 
 $('btnEntrar').addEventListener('click', entrar);
 $('btnSalir').addEventListener('click', salir);
+$('btnSalirMovil').addEventListener('click', salir);
+// «···» del celular: se cierra al elegir algo, al tocar fuera o con Esc.
+$('masMovil').addEventListener('click', e => { if (e.target.closest('.mas-menu button')) $('masMovil').open = false; });
+document.addEventListener('click', e => { if (!e.target.closest('#masMovil')) $('masMovil').open = false; });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('masMovil').open = false; });
 
 if ('serviceWorker' in navigator) {
     // S-24 de Proyectos (v0.153.0): la CSP exige Trusted Types; «minsa-sw» es la UNICA politica que permite y solo deja pasar './sw.js'.

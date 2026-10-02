@@ -58,7 +58,14 @@
   <main id="principal" class="principal">
     <header class="barra-movil">
       <img class="solo-claro" src="./marca/lockup.svg" alt="MINSA ENERGY" width="96" height="34"><img class="solo-oscuro" src="./marca/lockup-oscuro.svg" alt="MINSA ENERGY" width="96" height="34">
-      <button id="temaMovil" class="mn-btn" type="button">Tema</button>
+      <!-- v0.4.0: en celular, Tema y Salir dentro de «···» (como Celular.dc.html de la maqueta): el rail con Salir no se ve abajo de 720 px -->
+      <details id="masMovil" class="mas-movil">
+        <summary class="mn-btn" aria-label="Más opciones">···</summary>
+        <div class="mas-menu">
+          <button id="temaMovil" class="mn-btn" type="button">Tema</button>
+          <button id="btnSalirMovil" class="mn-btn" type="button">Salir</button>
+        </div>
+      </details>
     </header>
     <div id="avisos" role="status" aria-live="polite"></div>
     <div id="vista" class="vista"></div>

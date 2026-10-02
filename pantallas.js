@@ -5,7 +5,7 @@
 // MINSA Proyectos (vistas.js/tablero.js). Todo con el()/textContent: los datos los escriben diez personas.
 
 import { misAbiertas, diasPara, columnasDe, tareasDe, avance, ordenar, ordenarProyectos, activosDe, nombreDe, nombreCorto,
-    iniciales, saludoDe, porVence, colorValido, fechaMexico, HECHO, PUEDE } from './reglas.js';
+    saludoDe, porVence, colorValido, fechaMexico, HECHO, PUEDE } from './reglas.js';
 import { estado, el, chip, chipVence, equipoDe, iconoEquipo, mesDia, fechaLegible, porId } from './comun.js';
 import { abrirNuevaTarea, abrirFicha, hacerArrastrable, hacerReceptora } from './tarjetas.js';
 
@@ -188,7 +188,8 @@ function tarjetaKanban(t, p) {
     c.appendChild(el('span', 'titulo', t.Title || '(sin título)'));
     const pie = el('span', 'kc-pie');
     if (t.Asignado) {
-        const q = el('span', 'quien'); q.appendChild(el('span', 'av', iniciales(nombreDe(t.Asignado, estado.roles))));
+        // v0.4.0: sin iniciales — Carlos quito los avatares de toda la app de Proyectos (v0.61.0, «no me gusta como se ve»).
+        const q = el('span', 'quien');
         q.appendChild(el('span', 'muted', nombreCorto(t.Asignado, estado.roles))); pie.appendChild(q);
     } else pie.appendChild(el('span', 'muted sin-dueno', 'sin dueño'));
     const cv = chipVence(t); if (cv) pie.appendChild(cv);

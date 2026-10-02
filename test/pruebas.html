@@ -301,7 +301,8 @@ try {
     await esperar(() => !$('pantallaSesion').classList.contains('oculto'), 'pantalla de sesion', 15000);
     await esperar(() => pantalla(), 'primera pantalla');
     R.ok('entra con MSAL y oculta la entrada', $('pantallaEntrar').classList.contains('oculto'));
-    R.ok('pie con la version', $('pie').textContent === 'MINSA ERP v0.3.0', $('pie').textContent);
+    R.ok('pie con la version', $('pie').textContent === 'MINSA ERP v0.4.0', $('pie').textContent);
+    R.ok('celular: «···» lleva Tema y Salir', !!document.querySelector('#masMovil #temaMovil') && !!document.querySelector('#masMovil #btnSalirMovil'));
     R.ok('nombre de PROY_Roles, no el correo', $('quien').textContent === 'Persona de Prueba', $('quien').textContent);
     R.ok('rol leido de PROY_Roles', $('rolQuien').textContent === ROL, $('rolQuien').textContent);
     R.ok('lee las 3 listas que pinta', ['PROY_Proyectos', 'PROY_Tareas', 'PROY_Roles'].every(n => DB.llamadas.some(c => c.includes('/lists/lista-' + esquema.listas.find(l => l.nombre === n).clave + '/items'))), DB.llamadas.join(' | '));
@@ -336,7 +337,7 @@ try {
     // 6. Proyecto: kanban de solo lectura
     const cols = () => [...document.querySelectorAll('#kanban .kcol')].map(c => `${c.querySelector('h2').textContent}:${c.querySelectorAll('.kc').length}`).join(' ');
     R.ok('kanban: cubetas default + «Sin cubeta»', cols() === 'Por hacer:5 En curso:1 En revisión:2 Hecho:1 Sin cubeta:1', cols());
-    R.ok('kanban: la tarjeta lleva quién (nombre corto) e iniciales', [...document.querySelectorAll('#kanban .kc')].some(c => /Colega/.test(c.textContent) && c.querySelector('.av')?.textContent === 'CD'));
+    R.ok('kanban: la tarjeta lleva quién (nombre corto) y sin iniciales', [...document.querySelectorAll('#kanban .kc')].some(c => /Colega/.test(c.textContent)) && !document.querySelector('#kanban .av'));
     R.ok('kanban: la tarjeta sin asignar dice «sin dueño»', !!document.querySelector('#kanban .kc .sin-dueno'));
     R.ok('kanban: orden, alta primero en «Por hacer»', document.querySelector('#kanban .k-por-hacer .kc .titulo').textContent === 'Vencida mía');
     if (ROL === 'lectura') R.ok('kanban (lectura): «Nueva tarea» dice por qué no y no hace nada', $('btnNuevaTarea').disabled && $('btnNuevaTarea').classList.contains('incompleto') && $('btnNuevaTarea').textContent === 'Nueva tarea: tu rol es de lectura', $('btnNuevaTarea').textContent);

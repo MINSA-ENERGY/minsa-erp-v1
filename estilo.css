@@ -221,7 +221,6 @@ body { margin: 0; background: var(--surface-page); color: var(--text-body); font
 .kc .titulo { color: var(--text-strong); font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; }
 .kc-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
 .kc .quien { display: inline-flex; align-items: center; gap: 8px; }
-.av { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; background: var(--info-bg); color: var(--brand); font: 700 11px var(--font-ui); flex: none; }
 .nota-lectura { color: var(--text-muted); font-size: 13px; margin: 0; }
 /* en construccion */
 .construccion { align-items: flex-start; max-width: 720px; }
@@ -241,6 +240,11 @@ body { margin: 0; background: var(--surface-page); color: var(--text-body); font
   .erp .barra-movil { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid var(--line-soft); background: var(--card); }
   .erp .barra-movil img { width: 96px; height: auto; }
   .erp .barra-movil .mn-btn { min-height: 36px; font-size: 13px; }
+  .mas-movil { position: relative; }
+  .mas-movil > summary { list-style: none; cursor: pointer; min-width: 44px; justify-content: center; letter-spacing: 2px; }
+  .mas-movil > summary::-webkit-details-marker { display: none; }
+  .mas-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; display: flex; flex-direction: column; gap: 6px; min-width: 160px; padding: 8px; background: var(--card); border: 1px solid var(--line-soft); border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, .12); }
+  .mas-menu .mn-btn { width: 100%; justify-content: flex-start; }
   .vista { padding: 18px 16px 96px; gap: 18px; }
   .vista .ttl { font-size: 22px; }
   .vista .cabecera { flex-direction: column; }
