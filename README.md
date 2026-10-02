@@ -91,8 +91,8 @@ de este repo).
   liga a otra tarjeta (F1 de Proyectos) y el árbol plegable de expediente (v0.33.0); borrar una nota.
 - **Escribir una vez en real en `PROY_Ligas`** (subir un lote al buzón de CALYTEK, ligar, pegar enlace, quitar) y ver que
   Proyectos lo pinta igual y que `/archivar-calytek` reconoce el lote (PENDIENTE de Carlos, como el de `PROY_Tareas`).
-- Remoto: repo público en la org MINSA-ENERGY + GitHub Pages (decidido; **sin crear**, este repo no tiene remoto).
-- Medir el login real en `erp.minsaenergy.com` (la redirect URI la agregó Carlos en Entra, dicho por él, no medido).
+- ~~Remoto~~: HECHO — repo público `MINSA-ENERGY/minsa-erp` + GitHub Pages; v0.7.0 publicada el 2026-10-02 (push de Carlos).
+- ~~Login real~~: HECHO — Carlos entró en `erp.minsaenergy.com` y registró un gasto real el 2026-10-02 (dicho por él; `proponer-cfdi.ps1` leyó ese renglón de `ERP_Gastos`).
 - Fase 5: provisionar Gastos y escribir una vez en real (PENDIENTE de Carlos, sección v0.6.0); fase 6 (CFDI): código hecho en v0.7.0, falta la primera corrida real (PENDIENTE de Carlos, sección v0.7.0).
 
 ## Qué prueban las capturas de v0.2.0 (revisor-entregable, 2026-10-01)
